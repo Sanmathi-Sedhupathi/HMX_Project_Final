@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Calendar, Settings, LogOut, BarChart3, MessageSquare, Award, Video, Menu, X, ChevronRight, Play, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Routes, Route, Link, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { Calendar, Settings, LogOut, BarChart3, MessageSquare, Award, MapPin, Menu, X, ChevronRight, Video, Play } from 'lucide-react';
 import axios from 'axios';
 import { authService } from '../services/api';
+import VideoSubmissions from '../components/editor/VideoSubmissions';
 
 const EditorDashboard: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -11,9 +12,9 @@ const EditorDashboard: React.FC = () => {
   const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
-    pendingVideos: 0,
-    completedVideos: 0,
-    inProgressVideos: 0,
+    ongoingOrders: 0,
+    completedOrders: 0,
+    cancelledOrders: 0,
     totalEarnings: 0
   });
 
@@ -42,29 +43,49 @@ const EditorDashboard: React.FC = () => {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/editor/videos', {
+      console.log('Fetching editor stats...');
+
+      // Use the modified assigned-orders endpoint that now returns all orders
+      const response = await axios.get('http://localhost:5000/api/editor/assigned-orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      const videos = response.data;
+
+      console.log('Editor orders response:', response.data);
+      const allOrders = response.data || [];
+      const ongoingOrders = allOrders.filter((b: any) => !['completed', 'cancelled', 'rejected'].includes(b.status));
+      const completedOrders = allOrders.filter((b: any) => b.status === 'completed');
+      const cancelledOrders = allOrders.filter((b: any) => ['cancelled', 'rejected'].includes(b.status));
+
       const stats = {
-        pendingVideos: videos.filter((v: any) => v.status === 'pending').length,
-        completedVideos: videos.filter((v: any) => v.status === 'completed').length,
-        inProgressVideos: videos.filter((v: any) => v.status === 'in_progress').length,
-        totalEarnings: videos
-          .filter((v: any) => v.status === 'completed')
-          .reduce((sum: number, v: any) => sum + (v.earnings || 0), 0)
+        ongoingOrders: ongoingOrders.length,
+        completedOrders: completedOrders.length,
+        cancelledOrders: cancelledOrders.length,
+        totalEarnings: completedOrders
+          .filter((b: any) => b.payment_status === 'paid')
+          .reduce((sum: number, b: any) => sum + (b.payment_amount || 0), 0)
       };
+      console.log('Editor stats calculated:', stats);
       setStats(stats);
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
+      console.error('Failed to fetch editor stats:', err);
+      // Set default stats on error
+      setStats({
+        ongoingOrders: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        totalEarnings: 0
+      });
     }
   };
 
+
+
   const menuItems = [
     { path: '/editor', icon: <BarChart3 size={20} />, label: 'Dashboard', component: <DashboardContent stats={stats} /> },
-    { path: '/editor/videos', icon: <Video size={20} />, label: 'Video Projects', component: <VideosContent /> },
-    { path: '/editor/messages', icon: <MessageSquare size={20} />, label: 'Messages', component: <MessagesContent /> },
+    { path: '/editor/ongoing-orders', icon: <Video size={20} />, label: 'Ongoing Orders', component: <OngoingOrdersContent /> },
+    { path: '/editor/completed-orders', icon: <Award size={20} />, label: 'Completed Orders', component: <CompletedOrdersContent /> },
+    { path: '/editor/cancelled-orders', icon: <X size={20} />, label: 'Cancelled Orders', component: <CancelledOrdersContent /> },
+    { path: '/editor/video-submissions', icon: <Play size={20} />, label: 'Video Submissions', component: <VideoSubmissions /> },
     { path: '/editor/settings', icon: <Settings size={20} />, label: 'Settings', component: <SettingsContent /> },
   ];
 
@@ -153,6 +174,7 @@ const EditorDashboard: React.FC = () => {
             {menuItems.map((item) => (
               <Route key={item.path} path={item.path.replace('/editor', '')} element={item.component} />
             ))}
+            <Route path="/submission-history/:orderId" element={<SubmissionHistoryPage />} />
           </Routes>
         </div>
       </main>
@@ -166,9 +188,9 @@ const DashboardContent: React.FC<{ stats: any }> = ({ stats }) => (
     {/* Stats Grid */}
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {[
-        { label: 'Pending Videos', value: stats.pendingVideos, icon: <Clock className="text-yellow-500" /> },
-        { label: 'In Progress', value: stats.inProgressVideos, icon: <Play className="text-blue-500" /> },
-        { label: 'Completed', value: stats.completedVideos, icon: <CheckCircle className="text-green-500" /> },
+        { label: 'Ongoing Orders', value: stats.ongoingOrders, icon: <Video className="text-blue-500" /> },
+        { label: 'Completed Orders', value: stats.completedOrders, icon: <Award className="text-green-500" /> },
+        { label: 'Cancelled Orders', value: stats.cancelledOrders, icon: <X className="text-red-500" /> },
         { label: 'Total Earnings', value: `₹${stats.totalEarnings.toLocaleString('en-IN')}`, icon: <BarChart3 className="text-purple-500" /> },
       ].map((stat, index) => (
         <div key={index} className="bg-white rounded-lg shadow p-6">
@@ -185,225 +207,303 @@ const DashboardContent: React.FC<{ stats: any }> = ({ stats }) => (
 
     {/* Recent Activity */}
     <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Video Projects</h2>
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Orders</h2>
       <div className="space-y-4">
-        <p className="text-gray-500 text-center py-4">No recent video projects to show</p>
+        <p className="text-gray-500 text-center py-4">No recent orders to show</p>
       </div>
     </div>
   </div>
 );
 
-const VideosContent: React.FC = () => {
-  const [videos, setVideos] = useState<any[]>([]);
+const OngoingOrdersContent: React.FC = () => {
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedVideo, setSelectedVideo] = useState<any>(null);
-  const [filter, setFilter] = useState('all');
+  const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchVideos();
+    fetchOngoingOrders();
   }, []);
-
-  const fetchVideos = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/editor/videos', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setVideos(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch videos');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateVideoStatus = async (videoId: number, status: string, notes?: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.put(`http://localhost:5000/api/editor/videos/${videoId}`, {
-        status,
-        review_notes: notes
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      await fetchVideos();
-      setSelectedVideo(null);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to update video');
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return <Clock className="text-yellow-500" size={16} />;
-      case 'in_progress': return <Play className="text-blue-500" size={16} />;
-      case 'completed': return <CheckCircle className="text-green-500" size={16} />;
-      case 'rejected': return <AlertCircle className="text-red-500" size={16} />;
-      default: return <Clock className="text-gray-500" size={16} />;
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'in_progress': return 'bg-blue-100 text-blue-800';
       case 'completed': return 'bg-green-100 text-green-800';
+      case 'in_progress': return 'bg-blue-100 text-blue-800';
+      case 'editing': return 'bg-purple-100 text-purple-800';
+      case 'assigned': return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
       case 'rejected': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const filteredVideos = videos.filter(video => {
-    if (filter === 'all') return true;
-    return video.status === filter;
-  });
+  const handleViewHistory = (orderId: number) => {
+    // Navigate to submission history page
+    window.location.href = `/editor/submission-history/${orderId}`;
+  };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
+  const fetchOngoingOrders = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      console.log('Fetching ongoing orders for editor...');
 
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-800">{error}</p>
-      </div>
-    );
-  }
+      const response = await axios.get('http://localhost:5000/api/editor/assigned-orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      console.log('Editor assigned orders response:', response.data);
+      const allOrders = response.data || [];
+
+      // Filter for ongoing orders only
+      const ongoingOrders = allOrders.filter((order: any) =>
+        !['completed', 'cancelled', 'rejected'].includes(order.status)
+      );
+
+      console.log('Filtered ongoing orders:', ongoingOrders);
+      setOrders(ongoingOrders);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching ongoing orders:', err);
+      setError('Failed to fetch ongoing orders');
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
 
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {['all', 'pending', 'in_progress', 'completed', 'rejected'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === status
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
-          </button>
-        ))}
-      </div>
-
-      {/* Videos Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredVideos.map((video) => (
-          <div key={video.id} className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">{video.title}</h3>
-              {getStatusIcon(video.status)}
-            </div>
-            
-            <p className="text-gray-600 text-sm mb-4">{video.description}</p>
-            
-            <div className="flex items-center justify-between mb-4">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(video.status)}`}>
-                {video.status.replace('_', ' ')}
-              </span>
-              <span className="text-sm text-gray-500">
-                {new Date(video.created_at).toLocaleDateString()}
-              </span>
-            </div>
-
-            {video.drive_link && (
-              <a
-                href={video.drive_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700 mb-4"
-              >
-                <Video size={16} className="mr-1" />
-                View Video
-              </a>
+    <div>
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expand</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pilot ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {orders.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  No ongoing orders found.
+                </td>
+              </tr>
+            ) : (
+              orders.map((order) => (
+              <tr key={order.id}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <button
+                    onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <ChevronRight
+                      size={16}
+                      className={`transform transition-transform ${expandedOrder === order.id ? 'rotate-90' : ''}`}
+                    />
+                  </button>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  HMX{order.id.toString().padStart(4, '0')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {order.client_id || 'N/A'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {order.pilot_id || 'N/A'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(order.status)}`}>
+                    {order.status.split('_').map((word: string) =>
+                      word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join(' ')}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <button
+                    onClick={() => handleViewHistory(order.id)}
+                    className="text-blue-600 hover:text-blue-900 font-medium"
+                  >
+                    View
+                  </button>
+                </td>
+              </tr>
+              ))
             )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
-            <div className="flex gap-2">
-              {video.status === 'pending' && (
-                <button
-                  onClick={() => handleUpdateVideoStatus(video.id, 'in_progress')}
-                  className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-                >
-                  Start Editing
-                </button>
-              )}
-              
-              {video.status === 'in_progress' && (
-                <button
-                  onClick={() => setSelectedVideo(video)}
-                  className="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700"
-                >
-                  Complete
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+const CompletedOrdersContent: React.FC = () => {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchCompletedOrders();
+  }, []);
+
+  const fetchCompletedOrders = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/api/editor/assigned-orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const allOrders = response.data || [];
+      // Filter for completed orders only
+      const completedOrders = allOrders.filter((order: any) => order.status === 'completed');
+      setOrders(completedOrders);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching completed orders:', err);
+      setError('Failed to fetch completed orders');
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
+
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-900">Completed Orders</h2>
       </div>
 
-      {filteredVideos.length === 0 && (
-        <div className="text-center py-12">
-          <Video className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No videos found</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {filter === 'all' ? 'No video projects assigned yet.' : `No ${filter} videos found.`}
-          </p>
+      {orders.length === 0 ? (
+        <div className="px-6 py-8 text-center text-gray-500">
+          No completed orders found.
         </div>
-      )}
-
-      {/* Complete Video Modal */}
-      {selectedVideo && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Complete Video Project</h3>
-            <p className="text-gray-600 mb-4">Add any notes about the completed video:</p>
-            
-            <textarea
-              className="w-full p-3 border border-gray-300 rounded-lg mb-4"
-              rows={3}
-              placeholder="Optional notes..."
-            />
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSelectedVideo(null)}
-                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleUpdateVideoStatus(selectedVideo.id, 'completed')}
-                className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700"
-              >
-                Mark Complete
-              </button>
-            </div>
-          </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Final Video</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {orders.map((order) => (
+                <tr key={order.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    HMX{order.id.toString().padStart(4, '0')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{order.client_name || 'Unknown'}</div>
+                    <div className="text-sm text-gray-500">{order.client_email || ''}</div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {order.location_address || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {order.updated_at ? new Date(order.updated_at).toLocaleDateString() : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      order.payment_status === 'paid'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {order.payment_status || 'pending'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {order.delivery_video_link ? (
+                      <a
+                        href={order.delivery_video_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-900 font-medium"
+                      >
+                        <Play size={16} className="inline mr-1" />
+                        Watch Video
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">Not available</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 };
 
-const MessagesContent: React.FC = () => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <h2 className="text-lg font-semibold text-gray-900 mb-4">Messages</h2>
-    <div className="text-center py-12">
-      <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-      <h3 className="mt-2 text-sm font-medium text-gray-900">No messages</h3>
-      <p className="mt-1 text-sm text-gray-500">You don't have any messages yet.</p>
+const CancelledOrdersContent: React.FC = () => {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchCancelledOrders();
+  }, []);
+
+  const fetchCancelledOrders = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/api/editor/assigned-orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const allOrders = response.data || [];
+      // Filter for cancelled/rejected orders only
+      const cancelledOrders = allOrders.filter((order: any) =>
+        ['cancelled', 'rejected'].includes(order.status)
+      );
+      setOrders(cancelledOrders);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching cancelled orders:', err);
+      setError('Failed to fetch cancelled orders');
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Cancelled Orders</h2>
+      {orders.length === 0 ? (
+        <p className="text-gray-500 text-center py-8">No cancelled orders found.</p>
+      ) : (
+        <div className="space-y-4">
+          {orders.map((order) => (
+            <div key={order.id} className="border rounded-lg p-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-medium">Order HMX{order.id.toString().padStart(4, '0')}</h3>
+                  <p className="text-sm text-gray-500">Client: {order.client_name}</p>
+                  <p className="text-sm text-gray-500">Status: {order.status}</p>
+                </div>
+                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                  {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const SettingsContent: React.FC = () => (
   <div className="bg-white rounded-lg shadow p-6">
@@ -438,4 +538,187 @@ const SettingsContent: React.FC = () => (
   </div>
 );
 
-export default EditorDashboard; 
+const SubmissionHistoryPage: React.FC = () => {
+  const { orderId } = useParams<{ orderId: string }>();
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [newVideoLink, setNewVideoLink] = useState('');
+  const [newComments, setNewComments] = useState('');
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (orderId) {
+      fetchSubmissionHistory();
+    }
+  }, [orderId]);
+
+  const fetchSubmissionHistory = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5000/api/editor/submission-history/${orderId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSubmissions(response.data);
+      setLoading(false);
+    } catch (err) {
+      setError('Failed to fetch submission history');
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitVideo = async () => {
+    if (!newVideoLink.trim()) {
+      alert('Please enter a video link');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5000/api/editor/video-submissions`, {
+        order_id: orderId,
+        drive_link: newVideoLink,
+        editor_comments: newComments
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setShowSubmitModal(false);
+      setNewVideoLink('');
+      setNewComments('');
+      fetchSubmissionHistory();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to submit video');
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <button
+            onClick={() => navigate('/editor/ongoing-orders')}
+            className="text-blue-600 hover:text-blue-900 mb-2"
+          >
+            ← Back to Ongoing Orders
+          </button>
+          <h1 className="text-2xl font-bold">Submission History - Order HMX{orderId?.padStart(4, '0')}</h1>
+        </div>
+        <button
+          onClick={() => setShowSubmitModal(true)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Submit New Video
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Video Link</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Editor Comments</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin Comments</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {submissions.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  No submissions found for this order.
+                </td>
+              </tr>
+            ) : (
+              submissions.map((submission, index) => (
+                <tr key={index}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(submission.submitted_date).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <a
+                      href={submission.drive_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      View Video
+                    </a>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {submission.editor_comments || 'No comments'}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {submission.admin_comments || 'No comments'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      submission.status === 'approved' ? 'bg-green-100 text-green-800' :
+                      submission.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {submission.status}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Submit Video Modal */}
+      {showSubmitModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Submit New Video</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Video Link</label>
+                <input
+                  type="url"
+                  value={newVideoLink}
+                  onChange={(e) => setNewVideoLink(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Enter Google Drive link"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Comments</label>
+                <textarea
+                  value={newComments}
+                  onChange={(e) => setNewComments(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Add any comments..."
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowSubmitModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitVideo}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                >
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EditorDashboard;

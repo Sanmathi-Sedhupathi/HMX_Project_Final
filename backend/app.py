@@ -289,13 +289,15 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 pilot_id INTEGER,
+                editor_id INTEGER,
                 referral_id INTEGER,
+                admin_comments TEXT,
                 industry TEXT,
                 preferred_date DATE,
                 location TEXT,
                 duration INTEGER,
                 requirements TEXT,
-                status TEXT DEFAULT 'available',
+                status TEXT DEFAULT 'pending',
                 pilot_notes TEXT,
                 client_notes TEXT,
                 drive_link TEXT,
@@ -314,6 +316,7 @@ def init_db():
                 description TEXT,
                 FOREIGN KEY (user_id) REFERENCES users (id),
                 FOREIGN KEY (pilot_id) REFERENCES pilots (id),
+                FOREIGN KEY (editor_id) REFERENCES editors (id),
                 FOREIGN KEY (referral_id) REFERENCES referrals (id)
             )
         ''')
@@ -326,6 +329,7 @@ def init_db():
             ('payment_date', 'TIMESTAMP'),
             ('completed_date', 'TIMESTAMP'),
             ('referral_id', 'INTEGER'),
+            ('admin_comments', 'TEXT'),
             ('category', 'TEXT'),
             ('area_sqft', 'INTEGER'),
             ('num_floors', 'INTEGER'),
@@ -364,7 +368,6 @@ def init_db():
             ('discount_code', 'TEXT'),
             ('discount_amount', 'REAL'),
             ('total_cost', 'REAL'),
-            ('booking_status', 'TEXT DEFAULT "pending"'),
             ('editor_id', 'INTEGER'),
             ('pilot_id', 'INTEGER'),
             ('delivery_video_link', 'TEXT')
@@ -461,7 +464,35 @@ def init_db():
                     print(f"Error adding {column_name} column: {e}")
                 else:
                     print(f"{column_name} column already exists")
-    
+
+    # Check if video_reviews table exists
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='video_reviews'")
+    if not c.fetchone():
+        print("Creating video_reviews table...")
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS video_reviews (
+                video_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER NOT NULL,
+                client_id INTEGER,
+                editor_id INTEGER,
+                pilot_id INTEGER,
+                drive_link TEXT,
+                submitted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                admin_comments TEXT,
+                pilot_comments TEXT,
+                editor_comments TEXT,
+                status TEXT DEFAULT 'submitted' CHECK (status IN ('submitted', 'review_changes', 'completed', 'forwarded_to_editor')),
+                submission_type TEXT DEFAULT 'pilot' CHECK (submission_type IN ('pilot', 'editor')),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (order_id) REFERENCES bookings (id),
+                FOREIGN KEY (client_id) REFERENCES users (id),
+                FOREIGN KEY (editor_id) REFERENCES editors (id),
+                FOREIGN KEY (pilot_id) REFERENCES pilots (id)
+            )
+        ''')
+        print("video_reviews table created successfully")
+
     # Check if editors table exists
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='editors'")
     if not c.fetchone():
@@ -963,9 +994,13 @@ def token_required(f):
             user_data = dict(user)
             user_data['role'] = role  # Use the role from the token
             user_data['user_id'] = user_id  # Use the user_id from the token
-            
-            print("Token verification successful")
-            print(f"User data being passed: {user_data}")
+
+            print("✅ Token verification successful")
+            print(f"🔑 Token role: {role}")
+            print(f"👤 Token user_id: {user_id}")
+            print(f"📋 User data being passed to endpoint: {user_data}")
+            print(f"🎯 Endpoint being called: {request.endpoint}")
+            print("=" * 50)
             return f(user_data, *args, **kwargs)
             
         except Exception as e:
@@ -1607,7 +1642,7 @@ def get_bookings(current_user):
                 LEFT JOIN users u ON b.user_id = u.id
                 WHERE b.status = 'available' OR b.pilot_id = ?
                 ORDER BY b.created_at DESC
-            ''', (current_user['id'], current_user['id']))
+            ''', (current_user.get('id', current_user.get('user_id')), current_user.get('id', current_user.get('user_id'))))
         else:
             # Clients see their own bookings
             cursor.execute('''
@@ -1649,17 +1684,18 @@ def claim_booking(current_user, booking_id):
             return jsonify({'message': 'Booking not found or not available'}), 404
             
         # Update booking with pilot assignment
+        pilot_id = current_user.get('id', current_user.get('user_id'))
         cursor.execute('''
-            UPDATE bookings 
+            UPDATE bookings
             SET pilot_id = ?, status = 'assigned', updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND status = 'available'
-        ''', (current_user['id'], booking_id))
+        ''', (pilot_id, booking_id))
         
         if cursor.rowcount == 0:
             return jsonify({'message': 'Booking was claimed by another pilot'}), 409
             
         conn.commit()
-        print(f"Booking {booking_id} claimed by pilot {current_user['id']}")
+        print(f"Booking {booking_id} claimed by pilot {pilot_id}")
         conn.close()
         
         return jsonify({'message': 'Booking claimed successfully'})
@@ -1698,13 +1734,14 @@ def update_booking(current_user, booking_id):
             ''', (data.get('status'), data.get('pilot_notes'), data.get('client_notes'), booking_id))
         elif current_user['role'] == 'pilot':
             # Pilots can update status and notes for their assigned bookings
-            if booking['pilot_id'] != current_user['id']:
+            pilot_id = current_user.get('id', current_user.get('user_id'))
+            if booking['pilot_id'] != pilot_id:
                 return jsonify({'message': 'Unauthorized'}), 403
             cursor.execute('''
-                UPDATE bookings 
+                UPDATE bookings
                 SET status = ?, pilot_notes = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND pilot_id = ?
-            ''', (data.get('status'), data.get('pilot_notes'), booking_id, current_user['id']))
+            ''', (data.get('status'), data.get('pilot_notes'), booking_id, pilot_id))
         else:
             # Clients can update their notes
             cursor.execute('''
@@ -1737,10 +1774,11 @@ def complete_booking(current_user, booking_id):
         cursor = conn.cursor()
         
         # Check if booking exists and is assigned to this pilot
+        pilot_id = current_user.get('id', current_user.get('user_id'))
         cursor.execute('''
-            SELECT * FROM bookings 
+            SELECT * FROM bookings
             WHERE id = ? AND pilot_id = ? AND status = 'in_progress'
-        ''', (booking_id, current_user['id']))
+        ''', (booking_id, pilot_id))
         booking = cursor.fetchone()
         
         if not booking:
@@ -1754,10 +1792,10 @@ def complete_booking(current_user, booking_id):
                 completed_date = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND pilot_id = ?
-        ''', (data['drive_link'], booking_id, current_user['id']))
+        ''', (data['drive_link'], booking_id, pilot_id))
         
         conn.commit()
-        print(f"Booking {booking_id} completed by pilot {current_user['id']}")
+        print(f"Booking {booking_id} completed by pilot {pilot_id}")
         conn.close()
         
         return jsonify({'message': 'Booking completed successfully'})
@@ -1819,10 +1857,11 @@ def start_booking(current_user, booking_id):
         cursor = conn.cursor()
         
         # Check if booking exists and is assigned to this pilot
+        pilot_id = current_user.get('id', current_user.get('user_id'))
         cursor.execute('''
-            SELECT * FROM bookings 
+            SELECT * FROM bookings
             WHERE id = ? AND pilot_id = ? AND status = 'assigned'
-        ''', (booking_id, current_user['id']))
+        ''', (booking_id, pilot_id))
         booking = cursor.fetchone()
         
         if not booking:
@@ -1834,10 +1873,10 @@ def start_booking(current_user, booking_id):
             SET status = 'in_progress',
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND pilot_id = ?
-        ''', (booking_id, current_user['id']))
+        ''', (booking_id, pilot_id))
         
         conn.commit()
-        print(f"Booking {booking_id} started by pilot {current_user['id']}")
+        print(f"Booking {booking_id} started by pilot {pilot_id}")
         conn.close()
         
         return jsonify({'message': 'Booking started successfully'})
@@ -3056,7 +3095,7 @@ def get_admin_stats(current_user):
         # Get order stats
         order_stats = conn.execute('''
             SELECT 
-                COUNT(CASE WHEN status = 'new' THEN 1 END) as new_orders,
+                COUNT(CASE WHEN status = 'pending' THEN 1 END) as new_orders,
                 COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as ongoing_orders,
                 COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders
             FROM bookings
@@ -3254,36 +3293,246 @@ def get_admin_orders(current_user):
     # Handle GET request for fetching orders
     try:
         conn = get_db()
-        orders = conn.execute('''
-            SELECT b.*, 
-                   u.business_name, u.contact_name, u.email as client_email,
-                   p.name as pilot_name, p.email as pilot_email
+
+        # Get status filter from query parameters
+        status_filter = request.args.get('status', 'all')
+
+        # Use a simple query with only the columns we know exist from your data
+        base_query = '''
+            SELECT b.*,
+                   COALESCE(u.name, 'Unknown Client') as client_name,
+                   u.name, u.email as client_email, u.id as client_id,
+                   p.name as pilot_name, p.email as pilot_email, p.id as pilot_id_actual,
+                   e.name as editor_name, e.email as editor_email, e.id as editor_id_actual,
+                   r.name as referral_name, r.id as referral_id_actual
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
             LEFT JOIN pilots p ON b.pilot_id = p.id
-            ORDER BY b.created_at DESC
-        ''').fetchall()
+            LEFT JOIN editors e ON b.editor_id = e.id
+            LEFT JOIN referrals r ON b.referral_id = r.id
+        '''
+
+        # Add status filtering
+        if status_filter == 'pending':
+            query = base_query + " WHERE b.status = 'pending' ORDER BY b.created_at DESC"
+        elif status_filter == 'ongoing':
+            query = base_query + " WHERE b.status NOT IN ('pending', 'completed', 'rejected', 'cancelled') ORDER BY b.created_at DESC"
+        elif status_filter == 'completed':
+            query = base_query + " WHERE b.status = 'completed' ORDER BY b.created_at DESC"
+        elif status_filter == 'cancelled':
+            query = base_query + " WHERE b.status = 'cancelled' ORDER BY b.created_at DESC"
+        else:
+            query = base_query + " ORDER BY b.created_at DESC"
+
+        orders = conn.execute(query).fetchall()
         conn.close()
-        
+
         # Process orders to handle cases where user_id is null
         processed_orders = []
         for order in orders:
             order_dict = dict(order)
-            
+
             # If no user data, try to extract from client_notes
-            if not order_dict.get('business_name') and order_dict.get('client_notes'):
+            if not order_dict.get('name') and order_dict.get('client_notes'):
                 client_notes = order_dict['client_notes']
                 if client_notes.startswith('Client: '):
                     # Extract client name and email from notes
                     client_info = client_notes.split('\n')[0]
                     client_parts = client_info.replace('Client: ', '').split(' (')
                     if len(client_parts) == 2:
-                        order_dict['business_name'] = client_parts[0]
+                        order_dict['name'] = client_parts[0]
                         order_dict['client_email'] = client_parts[1].rstrip(')')
-            
-            processed_orders.append(order_dict)
-        
+
+            # Format the order data with ALL booking fields
+            formatted_order = {
+                # Basic Information
+                'id': order_dict.get('id'),
+                'booking_id': f"HMX{order_dict.get('id', ''):04d}",
+                'user_id': order_dict.get('user_id'),
+                'status': order_dict.get('status', 'pending'),
+                'created_at': order_dict.get('created_at', ''),
+                'updated_at': order_dict.get('updated_at', ''),
+
+                # Client Information
+                'client_id': order_dict.get('client_id'),
+                'client_name': order_dict.get('client_name') or order_dict.get('name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+
+                # Team Assignment
+                'pilot_id': order_dict.get('pilot_id'),
+                'pilot_name': order_dict.get('pilot_name', ''),
+                'editor_id': order_dict.get('editor_id'),
+                'editor_name': order_dict.get('editor_name', ''),
+                'referral_id': order_dict.get('referral_id'),
+                'referral_name': order_dict.get('referral_name', ''),
+
+                # Location & Property
+                'location': order_dict.get('location', ''),
+                'location_address': order_dict.get('location_address', ''),
+                'gps_coordinates': order_dict.get('gps_coordinates', ''),
+                'property_type': order_dict.get('property_type', ''),
+                'industry': order_dict.get('category', ''),  # Use category instead of industry
+                'indoor_outdoor': order_dict.get('indoor_outdoor', ''),
+                'area_size': order_dict.get('area_size', 0),
+                'area_unit': order_dict.get('area_unit', ''),
+                'area_sqft': order_dict.get('area_sqft', 0),
+                'num_floors': order_dict.get('num_floors', 0),
+                'rooms_sections': order_dict.get('rooms_sections', 0),
+                'duration': order_dict.get('duration', 0),
+
+                # Scheduling
+                'preferred_date': order_dict.get('preferred_date', ''),
+                'preferred_time': order_dict.get('preferred_time', ''),
+                'shooting_hours': order_dict.get('shooting_hours', 0),
+                'area_covered': order_dict.get('area_covered', 0),
+
+                # Video Specifications
+                'fpv_tour_type': order_dict.get('fpv_tour_type', ''),
+                'video_length': order_dict.get('video_length', 0),
+                'resolution': order_dict.get('resolution', ''),
+                'editing_style': order_dict.get('editing_style', ''),
+                'background_music_voiceover': bool(order_dict.get('background_music_voiceover', 0)),
+                'editing_color_grading': bool(order_dict.get('editing_color_grading', 0)),
+                'voiceover_script': bool(order_dict.get('voiceover_script', 0)),
+                'background_music_licensed': bool(order_dict.get('background_music_licensed', 0)),
+                'branding_overlay': bool(order_dict.get('branding_overlay', 0)),
+                'multiple_revisions': bool(order_dict.get('multiple_revisions', 0)),
+                'drone_licensing_fee': bool(order_dict.get('drone_licensing_fee', 0)),
+                'drone_permissions_required': bool(order_dict.get('drone_permissions_required', 0)),
+
+                # Financial Information
+                'base_package_cost': order_dict.get('base_package_cost', 0),
+                'base_cost': order_dict.get('base_cost', 0),
+                'final_cost': order_dict.get('final_cost', 0),
+                'total_cost': order_dict.get('total_cost', 0),
+                'travel_cost': order_dict.get('travel_cost', 0),
+                'tax_percentage': order_dict.get('tax_percentage', 0),
+                'discount_code': order_dict.get('discount_code', ''),
+                'discount_amount': order_dict.get('discount_amount', 0),
+                'payment_status': order_dict.get('payment_status', 'pending'),
+                'payment_amount': order_dict.get('payment_amount', 0),
+                'total_amount': order_dict.get('payment_amount', 0),  # For backward compatibility
+                'payment_date': order_dict.get('payment_date', ''),
+                'completed_date': order_dict.get('completed_date', ''),
+
+                # Requirements & Notes
+                'requirements': order_dict.get('requirements', ''),
+                'special_requirements': order_dict.get('special_requirements', ''),
+                'custom_quote': order_dict.get('custom_quote', ''),
+                'description': order_dict.get('description', ''),
+                'pilot_notes': order_dict.get('pilot_notes', ''),
+                'client_notes': order_dict.get('client_notes', ''),
+                'admin_comments': order_dict.get('admin_comments', ''),
+
+                # Links & Deliverables
+                'drive_link': order_dict.get('drive_link', ''),
+                'delivery_video_link': order_dict.get('delivery_video_link', '')
+            }
+
+            processed_orders.append(formatted_order)
+
+        # Debug: Print raw data from database
+        if orders:
+            print("Raw order from DB:", dict(orders[0]))
+            print("Raw order keys:", list(dict(orders[0]).keys()))
+
+        # Debug: Print processed order data
+        if processed_orders:
+            print("Processed order keys:", list(processed_orders[0].keys()))
+            sample = processed_orders[0]
+            print("Sample processed values:")
+            for key, value in sample.items():
+                if value and value != '' and value != 0:
+                    print(f"  {key}: {value}")
+
         return jsonify(processed_orders)
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@app.route('/api/admin/debug/bookings', methods=['GET'])
+@token_required
+def debug_bookings(current_user):
+    """Debug endpoint to check bookings directly"""
+    if current_user['role'] != 'admin':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+
+        # Get all bookings with basic info
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, user_id, status, property_type, location_address, created_at FROM bookings ORDER BY created_at DESC')
+        bookings = cursor.fetchall()
+
+        # Get all users
+        cursor.execute('SELECT id, name, email FROM users')
+        users = cursor.fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'bookings': [dict(zip(['id', 'user_id', 'status', 'property_type', 'location_address', 'created_at'], booking)) for booking in bookings],
+            'users': [dict(zip(['id', 'name', 'email'], user)) for user in users],
+            'total_bookings': len(bookings),
+            'total_users': len(users)
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/orders/<int:order_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
+@token_required
+def manage_order(current_user, order_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    if current_user['role'] != 'admin':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        if request.method == 'PUT':
+            data = request.json
+
+            # Update order status, assignments, or comments
+            update_fields = []
+            update_values = []
+
+            if 'status' in data:
+                update_fields.append('status = ?')
+                update_values.append(data['status'])
+
+            if 'pilot_id' in data:
+                update_fields.append('pilot_id = ?')
+                update_values.append(data['pilot_id'] if data['pilot_id'] else None)
+
+            if 'editor_id' in data:
+                update_fields.append('editor_id = ?')
+                update_values.append(data['editor_id'] if data['editor_id'] else None)
+
+            if 'admin_comments' in data:
+                update_fields.append('admin_comments = ?')
+                update_values.append(data['admin_comments'])
+
+            if update_fields:
+                update_fields.append('updated_at = CURRENT_TIMESTAMP')
+                update_values.append(order_id)
+
+                query = f"UPDATE bookings SET {', '.join(update_fields)} WHERE id = ?"
+                cursor.execute(query, update_values)
+                conn.commit()
+
+            conn.close()
+            return jsonify({'message': 'Order updated successfully'})
+
+        elif request.method == 'DELETE':
+            cursor.execute('DELETE FROM bookings WHERE id = ?', (order_id,))
+            conn.commit()
+            conn.close()
+            return jsonify({'message': 'Order deleted successfully'})
+
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
@@ -4627,6 +4876,1017 @@ def reject_application(current_user, application_type, application_id):
     except Exception as e:
         print(f"Error rejecting application: {str(e)}")
         response = jsonify({'message': 'Failed to reject application'})
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 500
+
+# Video Reviews API Endpoints
+
+@app.route('/api/admin/video-reviews', methods=['GET'])
+@token_required
+def get_video_reviews(current_user):
+    """Get video reviews for admin dashboard"""
+    if current_user['role'] != 'admin':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+
+        # Get submission type filter
+        submission_type = request.args.get('type', 'all')  # pilot, editor, or all
+
+        base_query = '''
+            SELECT vr.*,
+                   b.id as booking_id,
+                   u.name as client_name, u.email as client_email,
+                   p.name as pilot_name, p.email as pilot_email,
+                   e.name as editor_name, e.email as editor_email
+            FROM video_reviews vr
+            LEFT JOIN bookings b ON vr.order_id = b.id
+            LEFT JOIN users u ON vr.client_id = u.id
+            LEFT JOIN pilots p ON vr.pilot_id = p.id
+            LEFT JOIN editors e ON vr.editor_id = e.id
+        '''
+
+        if submission_type == 'pilot':
+            query = base_query + " WHERE vr.submission_type = 'pilot' ORDER BY vr.submitted_date DESC"
+        elif submission_type == 'editor':
+            query = base_query + " WHERE vr.submission_type = 'editor' ORDER BY vr.submitted_date DESC"
+        else:
+            query = base_query + " ORDER BY vr.submitted_date DESC"
+
+        reviews = conn.execute(query).fetchall()
+        conn.close()
+
+        # Format the response
+        reviews_list = []
+        for review in reviews:
+            review_dict = dict(review)
+            reviews_list.append({
+                'video_id': review_dict.get('video_id'),
+                'order_id': review_dict.get('order_id'),
+                'booking_id': f"HMX{review_dict.get('order_id', ''):04d}",
+                'client_id': review_dict.get('client_id'),
+                'client_name': review_dict.get('client_name', 'Unknown'),
+                'client_email': review_dict.get('client_email', ''),
+                'editor_id': review_dict.get('editor_id'),
+                'editor_name': review_dict.get('editor_name', 'Unassigned'),
+                'pilot_id': review_dict.get('pilot_id'),
+                'pilot_name': review_dict.get('pilot_name', 'Unassigned'),
+                'drive_link': review_dict.get('drive_link', ''),
+                'submitted_date': review_dict.get('submitted_date', ''),
+                'admin_comments': review_dict.get('admin_comments', ''),
+                'pilot_comments': review_dict.get('pilot_comments', ''),
+                'editor_comments': review_dict.get('editor_comments', ''),
+                'status': review_dict.get('status', 'submitted'),
+                'submission_type': review_dict.get('submission_type', 'pilot'),
+                'created_at': review_dict.get('created_at', ''),
+                'updated_at': review_dict.get('updated_at', '')
+            })
+
+        return jsonify(reviews_list)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/video-reviews/<int:video_id>', methods=['PUT'])
+@token_required
+def update_video_review(current_user, video_id):
+    """Update video review status and comments"""
+    if current_user['role'] != 'admin':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        data = request.json
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Update video review
+        update_fields = []
+        update_values = []
+
+        if 'status' in data:
+            update_fields.append('status = ?')
+            update_values.append(data['status'])
+
+        if 'admin_comments' in data:
+            update_fields.append('admin_comments = ?')
+            update_values.append(data['admin_comments'])
+
+        if update_fields:
+            update_fields.append('updated_at = CURRENT_TIMESTAMP')
+            update_values.append(video_id)
+
+            query = f"UPDATE video_reviews SET {', '.join(update_fields)} WHERE video_id = ?"
+            cursor.execute(query, update_values)
+
+            # If status is being updated, also update bookings table
+            if 'status' in data:
+                # Get the order_id, submission_type, and drive_link for this video review
+                cursor.execute('SELECT order_id, submission_type, drive_link, editor_id FROM video_reviews WHERE video_id = ?', (video_id,))
+                result = cursor.fetchone()
+
+                if result:
+                    order_id, submission_type, drive_link, editor_id = result
+
+                    # Update bookings table based on status and submission type
+                    if data['status'] == 'forwarded_to_editor' and submission_type == 'pilot':
+                        cursor.execute('UPDATE bookings SET status = ? WHERE id = ?', ('editing', order_id))
+                    elif data['status'] == 'completed' and submission_type == 'editor':
+                        # When marking editor video as completed, also update delivery link
+                        cursor.execute('''
+                            UPDATE bookings
+                            SET status = 'completed', delivery_video_link = ?
+                            WHERE id = ?
+                        ''', (drive_link, order_id))
+                        print(f"Updated booking {order_id} status to completed with video link: {drive_link}")
+                    elif data['status'] == 'approved' and submission_type == 'editor':
+                        # When admin approves editor video, update delivery_video_link with the latest approved video
+                        # Get the latest approved video from this editor for this order
+                        cursor.execute('''
+                            SELECT drive_link FROM video_reviews
+                            WHERE order_id = ? AND editor_id = ? AND submission_type = 'editor' AND status = 'approved'
+                            ORDER BY submitted_date DESC
+                            LIMIT 1
+                        ''', (order_id, editor_id))
+
+                        latest_approved = cursor.fetchone()
+                        if latest_approved:
+                            latest_drive_link = latest_approved[0]
+                            # Update the booking with the latest approved video link
+                            cursor.execute('''
+                                UPDATE bookings
+                                SET delivery_video_link = ?, status = 'completed'
+                                WHERE id = ?
+                            ''', (latest_drive_link, order_id))
+                            print(f"Updated booking {order_id} with approved video link: {latest_drive_link}")
+                        else:
+                            # If no approved video found yet, just update with current video link
+                            cursor.execute('''
+                                UPDATE bookings
+                                SET delivery_video_link = ?, status = 'completed'
+                                WHERE id = ?
+                            ''', (drive_link, order_id))
+                            print(f"Updated booking {order_id} with current video link: {drive_link}")
+
+            conn.commit()
+
+        conn.close()
+        return jsonify({'message': 'Video review updated successfully'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/video-submissions', methods=['GET', 'POST'])
+@token_required
+def pilot_video_submissions(current_user):
+    """Handle pilot video submissions"""
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+
+        if request.method == 'GET':
+            # Get pilot's video submissions
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT vr.*, b.id as booking_id,
+                       u.name as client_name
+                FROM video_reviews vr
+                LEFT JOIN bookings b ON vr.order_id = b.id
+                LEFT JOIN users u ON vr.client_id = u.id
+                WHERE vr.pilot_id = ? AND vr.submission_type = 'pilot'
+                ORDER BY vr.submitted_date DESC
+            ''', (current_user['user_id'],))
+
+            submissions = cursor.fetchall()
+            conn.close()
+
+            submissions_list = []
+            for submission in submissions:
+                sub_dict = dict(submission)
+                submissions_list.append({
+                    'video_id': sub_dict.get('video_id'),
+                    'order_id': sub_dict.get('order_id'),
+                    'booking_id': f"HMX{sub_dict.get('order_id', ''):04d}",
+                    'client_name': sub_dict.get('client_name', 'Unknown'),
+                    'drive_link': sub_dict.get('drive_link', ''),
+                    'pilot_comments': sub_dict.get('pilot_comments', ''),
+                    'admin_comments': sub_dict.get('admin_comments', ''),
+                    'status': sub_dict.get('status', 'submitted'),
+                    'submitted_date': sub_dict.get('submitted_date', '')
+                })
+
+            return jsonify(submissions_list)
+
+        elif request.method == 'POST':
+            # Create new pilot video submission
+            data = request.json
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO video_reviews (
+                    order_id, client_id, pilot_id, drive_link, pilot_comments,
+                    submission_type, status
+                ) VALUES (?, ?, ?, ?, ?, 'pilot', 'submitted')
+            ''', (
+                data.get('order_id'),
+                data.get('client_id'),
+                current_user['user_id'],
+                data.get('drive_link'),
+                data.get('pilot_comments', '')
+            ))
+
+            conn.commit()
+            conn.close()
+
+            return jsonify({'message': 'Video submitted successfully'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/editor/video-submissions', methods=['GET', 'POST'])
+@token_required
+def editor_video_submissions(current_user):
+    """Handle editor video submissions"""
+    if current_user['role'] != 'editor':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+
+        if request.method == 'GET':
+            # Get editor's video submissions
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT vr.*, b.id as booking_id,
+                       u.name as client_name
+                FROM video_reviews vr
+                LEFT JOIN bookings b ON vr.order_id = b.id
+                LEFT JOIN users u ON vr.client_id = u.id
+                WHERE vr.editor_id = ? AND vr.submission_type = 'editor'
+                ORDER BY vr.submitted_date DESC
+            ''', (current_user['user_id'],))
+
+            submissions = cursor.fetchall()
+            conn.close()
+
+            submissions_list = []
+            for submission in submissions:
+                sub_dict = dict(submission)
+                submissions_list.append({
+                    'video_id': sub_dict.get('video_id'),
+                    'order_id': sub_dict.get('order_id'),
+                    'booking_id': f"HMX{sub_dict.get('order_id', ''):04d}",
+                    'client_name': sub_dict.get('client_name', 'Unknown'),
+                    'drive_link': sub_dict.get('drive_link', ''),
+                    'editor_comments': sub_dict.get('editor_comments', ''),
+                    'admin_comments': sub_dict.get('admin_comments', ''),
+                    'status': sub_dict.get('status', 'submitted'),
+                    'submitted_date': sub_dict.get('submitted_date', '')
+                })
+
+            return jsonify(submissions_list)
+
+        elif request.method == 'POST':
+            # Create new editor video submission
+            data = request.json
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO video_reviews (
+                    order_id, client_id, editor_id, pilot_id, drive_link, editor_comments,
+                    submission_type, status
+                ) VALUES (?, ?, ?, ?, ?, ?, 'editor', 'submitted')
+            ''', (
+                data.get('order_id'),
+                data.get('client_id'),
+                current_user['user_id'],
+                data.get('pilot_id'),
+                data.get('drive_link'),
+                data.get('editor_comments', '')
+            ))
+
+            conn.commit()
+            conn.close()
+
+            return jsonify({'message': 'Edited video submitted successfully'})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/assigned-orders', methods=['GET'])
+@token_required
+def get_pilot_assigned_orders(current_user):
+    """Get ALL orders assigned to pilot for dashboard"""
+    print(f"Pilot assigned orders - current_user: {current_user}")
+
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        print(f"Fetching orders for pilot ID: {current_user['user_id']}")
+
+        # Get ALL orders assigned to this pilot (for dashboard)
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email,
+                   e.name as editor_name
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            LEFT JOIN editors e ON b.editor_id = e.id
+            WHERE b.pilot_id = ?
+            ORDER BY b.created_at DESC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'booking_id': f"HMX{order_dict.get('id', ''):04d}",
+                'user_id': order_dict.get('user_id'),
+                'client_id': order_dict.get('user_id'),
+                'client_name': order_dict.get('client_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'editor_id': order_dict.get('editor_id'),
+                'editor_name': order_dict.get('editor_name', 'Unassigned'),
+                'status': order_dict.get('status'),
+                'preferred_date': order_dict.get('preferred_date', ''),
+                'location_address': order_dict.get('location_address', ''),
+                'property_type': order_dict.get('property_type', ''),
+                'payment_amount': order_dict.get('payment_amount'),
+                'payment_status': order_dict.get('payment_status'),
+                'delivery_video_link': order_dict.get('delivery_video_link'),
+                'updated_at': order_dict.get('updated_at'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        print(f"Returning {len(orders_list)} orders")
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"Error in get_pilot_assigned_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/editor/ongoing-orders', methods=['GET'])
+@token_required
+def get_editor_ongoing_orders(current_user):
+    """Get ongoing orders for the logged-in editor (not completed, cancelled, or rejected)"""
+    print(f"Editor ongoing orders - current_user: {current_user}")
+
+    if current_user['role'] != 'editor':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get ongoing bookings assigned to this editor
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.editor_id = ? AND b.status NOT IN ('completed', 'cancelled', 'rejected')
+            ORDER BY b.preferred_date ASC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'user_id': order_dict.get('user_id'),
+                'client_id': order_dict.get('user_id'),
+                'pilot_id': order_dict.get('pilot_id'),
+                'client_name': order_dict.get('client_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'location_address': order_dict.get('location_address'),
+                'status': order_dict.get('status'),
+                'preferred_date': order_dict.get('preferred_date'),
+                'payment_amount': order_dict.get('payment_amount'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        print(f"Returning {len(orders_list)} ongoing orders for editor")
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"Error in get_editor_ongoing_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/editor/completed-orders', methods=['GET', 'OPTIONS'])
+@token_required
+def get_editor_completed_orders(current_user):
+    """Get completed orders for the logged-in editor"""
+
+    # Handle preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    print(f"\n=== EDITOR COMPLETED ORDERS DEBUG ===")
+    print(f"Current user data: {current_user}")
+    print(f"User ID: {current_user.get('user_id', 'NOT_FOUND')}")
+    print(f"User role: {current_user.get('role', 'NOT_FOUND')}")
+
+    if current_user['role'] != 'editor':
+        print(f"❌ AUTHORIZATION FAILED: Expected role 'editor', got '{current_user['role']}'")
+        response = jsonify({'message': f'Unauthorized - Role is {current_user["role"]}, expected editor'})
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 403
+
+    print(f"✅ AUTHORIZATION PASSED: User is an editor")
+
+    try:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get only completed bookings assigned to this editor
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.editor_id = ? AND b.status = 'completed'
+            ORDER BY b.updated_at DESC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'user_id': order_dict.get('user_id'),
+                'client_name': order_dict.get('client_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'location_address': order_dict.get('location_address'),
+                'status': order_dict.get('status'),
+                'payment_status': order_dict.get('payment_status'),
+                'payment_amount': order_dict.get('payment_amount'),
+                'delivery_video_link': order_dict.get('delivery_video_link'),
+                'updated_at': order_dict.get('updated_at'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        print(f"Returning {len(orders_list)} completed orders for editor")
+        response = jsonify(orders_list)
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    except Exception as e:
+        print(f"Error in get_editor_completed_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'error': str(e)})
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 500
+
+@app.route('/api/editor/cancelled-orders', methods=['GET', 'OPTIONS'])
+@token_required
+def get_editor_cancelled_orders(current_user):
+    """Get cancelled/rejected orders for the logged-in editor"""
+    print(f"\n=== EDITOR CANCELLED ORDERS DEBUG ===")
+    print(f"Current user data: {current_user}")
+    print(f"User ID: {current_user.get('user_id', 'NOT_FOUND')}")
+    print(f"User role: {current_user.get('role', 'NOT_FOUND')}")
+
+    if current_user['role'] != 'editor':
+        print(f"❌ AUTHORIZATION FAILED: Expected role 'editor', got '{current_user['role']}'")
+        return jsonify({'message': f'Unauthorized - Role is {current_user["role"]}, expected editor'}), 403
+
+    print(f"✅ AUTHORIZATION PASSED: User is an editor")
+
+    try:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get cancelled/rejected bookings assigned to this editor
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.editor_id = ? AND b.status IN ('cancelled', 'rejected')
+            ORDER BY b.updated_at DESC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'user_id': order_dict.get('user_id'),
+                'client_name': order_dict.get('client_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'location_address': order_dict.get('location_address'),
+                'status': order_dict.get('status'),
+                'updated_at': order_dict.get('updated_at'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        print(f"Returning {len(orders_list)} cancelled orders for editor")
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"Error in get_editor_cancelled_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/editor/submission-history/<int:order_id>', methods=['GET'])
+@token_required
+def get_editor_submission_history(current_user, order_id):
+    """Get submission history for a specific order"""
+    if current_user['role'] != 'editor':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get all video submissions for this order by this editor
+        cursor.execute('''
+            SELECT vr.*, b.id as booking_id
+            FROM video_reviews vr
+            LEFT JOIN bookings b ON vr.order_id = b.id
+            WHERE vr.order_id = ? AND vr.editor_id = ? AND vr.submission_type = 'editor'
+            ORDER BY vr.submitted_date DESC
+        ''', (order_id, current_user['user_id']))
+
+        submissions = cursor.fetchall()
+        conn.close()
+
+        submissions_list = []
+        for submission in submissions:
+            sub_dict = dict(submission)
+            submissions_list.append({
+                'video_id': sub_dict.get('video_id'),
+                'order_id': sub_dict.get('order_id'),
+                'drive_link': sub_dict.get('drive_link'),
+                'editor_comments': sub_dict.get('editor_comments'),
+                'admin_comments': sub_dict.get('admin_comments'),
+                'status': sub_dict.get('status'),
+                'submitted_date': sub_dict.get('submitted_date')
+            })
+
+        return jsonify(submissions_list)
+
+    except Exception as e:
+        print(f"Error in get_editor_submission_history: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/editor/video-submissions', methods=['POST'])
+@token_required
+def submit_editor_video(current_user):
+    """Submit a new video by editor"""
+    if current_user['role'] != 'editor':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        drive_link = data.get('drive_link')
+        editor_comments = data.get('editor_comments', '')
+
+        if not order_id or not drive_link:
+            return jsonify({'message': 'Order ID and drive link are required'}), 400
+
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Insert new video submission
+        cursor.execute('''
+            INSERT INTO video_reviews (
+                order_id, editor_id, submission_type, drive_link,
+                editor_comments, status, submitted_date
+            ) VALUES (?, ?, 'editor', ?, ?, 'submitted', ?)
+        ''', (
+            order_id,
+            current_user['user_id'],
+            drive_link,
+            editor_comments,
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'Video submitted successfully'}), 201
+
+    except Exception as e:
+        print(f"Error in submit_editor_video: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/test-simple', methods=['GET'])
+def test_simple_pilot():
+    """Simple test endpoint without authentication"""
+    return jsonify({'message': 'Pilot endpoint is working', 'timestamp': datetime.now().isoformat()})
+
+@app.route('/api/pilot/submission-history/<int:order_id>', methods=['GET'])
+@token_required
+def get_pilot_submission_history(current_user, order_id):
+    """Get submission history for a specific order"""
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Get all video submissions for this order by this pilot
+        cursor.execute('''
+            SELECT vr.*, b.id as booking_id
+            FROM video_reviews vr
+            LEFT JOIN bookings b ON vr.order_id = b.id
+            WHERE vr.order_id = ? AND vr.pilot_id = ? AND vr.submission_type = 'pilot'
+            ORDER BY vr.submitted_date DESC
+        ''', (order_id, current_user['user_id']))
+
+        submissions = cursor.fetchall()
+        conn.close()
+
+        submissions_list = []
+        for submission in submissions:
+            sub_dict = dict(submission)
+            submissions_list.append({
+                'video_id': sub_dict.get('video_id'),
+                'order_id': sub_dict.get('order_id'),
+                'drive_link': sub_dict.get('drive_link'),
+                'pilot_comments': sub_dict.get('pilot_comments'),
+                'admin_comments': sub_dict.get('admin_comments'),
+                'status': sub_dict.get('status'),
+                'submitted_date': sub_dict.get('submitted_date')
+            })
+
+        return jsonify(submissions_list)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/all-orders', methods=['GET'])
+@token_required
+def get_pilot_all_orders(current_user):
+    """Get ALL orders for the logged-in pilot"""
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Get ALL bookings assigned to this pilot
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.pilot_id = ?
+            ORDER BY b.created_at DESC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'user_id': order_dict.get('user_id'),
+                'client_id': order_dict.get('user_id'),
+                'editor_id': order_dict.get('editor_id'),
+                'client_name': order_dict.get('client_name') or order_dict.get('business_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'location_address': order_dict.get('location_address'),
+                'status': order_dict.get('status'),
+                'preferred_date': order_dict.get('preferred_date'),
+                'payment_amount': order_dict.get('payment_amount'),
+                'payment_status': order_dict.get('payment_status'),
+                'delivery_video_link': order_dict.get('delivery_video_link'),
+                'updated_at': order_dict.get('updated_at'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"Error in get_pilot_all_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/ongoing-orders', methods=['GET'])
+@token_required
+def get_pilot_ongoing_orders(current_user):
+    """Get ongoing orders for the logged-in pilot (not completed, cancelled, or rejected)"""
+    print(f"Pilot ongoing orders - current_user: {current_user}")
+
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get ongoing bookings assigned to this pilot
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.pilot_id = ? AND b.status NOT IN ('completed', 'cancelled', 'rejected')
+            ORDER BY b.preferred_date ASC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'user_id': order_dict.get('user_id'),
+                'client_id': order_dict.get('user_id'),
+                'editor_id': order_dict.get('editor_id'),
+                'client_name': order_dict.get('client_name') or order_dict.get('business_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'location_address': order_dict.get('location_address'),
+                'status': order_dict.get('status'),
+                'preferred_date': order_dict.get('preferred_date'),
+                'payment_amount': order_dict.get('payment_amount'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"Error in get_pilot_ongoing_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/completed-orders', methods=['GET'])
+@token_required
+def get_pilot_completed_orders(current_user):
+    """Get completed orders for the logged-in pilot"""
+    print(f"Pilot completed orders - current_user: {current_user}")
+
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Get only completed bookings assigned to this pilot
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.pilot_id = ? AND b.status = 'completed'
+            ORDER BY b.updated_at DESC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'user_id': order_dict.get('user_id'),
+                'client_name': order_dict.get('client_name') or order_dict.get('business_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'location_address': order_dict.get('location_address'),
+                'status': order_dict.get('status'),
+                'payment_status': order_dict.get('payment_status'),
+                'payment_amount': order_dict.get('payment_amount'),
+                'delivery_video_link': order_dict.get('delivery_video_link'),
+                'updated_at': order_dict.get('updated_at'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"Error in get_pilot_completed_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/cancelled-orders', methods=['GET'])
+@token_required
+def get_pilot_cancelled_orders(current_user):
+    """Get cancelled/rejected orders for the logged-in pilot"""
+    print(f"Pilot cancelled orders - current_user: {current_user}")
+
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Get cancelled/rejected bookings assigned to this pilot
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.pilot_id = ? AND b.status IN ('cancelled', 'rejected')
+            ORDER BY b.updated_at DESC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'user_id': order_dict.get('user_id'),
+                'client_name': order_dict.get('client_name') or order_dict.get('business_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'location_address': order_dict.get('location_address'),
+                'status': order_dict.get('status'),
+                'updated_at': order_dict.get('updated_at'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        return jsonify(orders_list)
+
+    except Exception as e:
+        print(f"Error in get_pilot_cancelled_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pilot/final-review', methods=['GET'])
+@token_required
+def get_pilot_final_review(current_user):
+    """Get orders ready for pilot final review"""
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Get orders where editor has submitted final video and waiting for pilot approval
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email,
+                   vr.drive_link as final_video_link
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            LEFT JOIN video_reviews vr ON b.id = vr.order_id
+                AND vr.submission_type = 'editor'
+                AND vr.status = 'submitted'
+            WHERE b.pilot_id = ? AND b.status = 'final_review'
+            ORDER BY b.preferred_date ASC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'client_id': order_dict.get('user_id'),
+                'client_name': order_dict.get('client_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'status': order_dict.get('status'),
+                'final_video_link': order_dict.get('final_video_link')
+            })
+
+        return jsonify(orders_list)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/editor/assigned-orders', methods=['GET', 'OPTIONS'])
+@token_required
+def get_editor_assigned_orders(current_user):
+    """Get ALL orders assigned to editor for dashboard"""
+
+    # Handle preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    print(f"\n=== EDITOR ASSIGNED ORDERS DEBUG ===")
+    print(f"Current user data: {current_user}")
+    print(f"User ID: {current_user.get('user_id', 'NOT_FOUND')}")
+    print(f"User role: {current_user.get('role', 'NOT_FOUND')}")
+    print(f"User email: {current_user.get('email', 'NOT_FOUND')}")
+    print(f"User name: {current_user.get('name', 'NOT_FOUND')}")
+
+    if current_user['role'] != 'editor':
+        print(f"❌ AUTHORIZATION FAILED: Expected role 'editor', got '{current_user['role']}'")
+        response = jsonify({'message': f'Unauthorized - Role is {current_user["role"]}, expected editor'})
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 403
+
+    print(f"✅ AUTHORIZATION PASSED: User is an editor")
+
+    try:
+        conn = get_db()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        print(f"Fetching orders for editor ID: {current_user['user_id']}")
+
+        # Get ALL orders assigned to this editor (for dashboard)
+        cursor.execute('''
+            SELECT b.*, u.name as client_name, u.email as client_email,
+                   p.name as pilot_name
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            LEFT JOIN pilots p ON b.pilot_id = p.id
+            WHERE b.editor_id = ?
+            ORDER BY b.created_at DESC
+        ''', (current_user['user_id'],))
+
+        orders = cursor.fetchall()
+        conn.close()
+
+        orders_list = []
+        for order in orders:
+            order_dict = dict(order)
+            orders_list.append({
+                'id': order_dict.get('id'),
+                'booking_id': f"HMX{order_dict.get('id', ''):04d}",
+                'user_id': order_dict.get('user_id'),
+                'client_id': order_dict.get('user_id'),
+                'client_name': order_dict.get('client_name', 'Unknown'),
+                'client_email': order_dict.get('client_email', ''),
+                'pilot_id': order_dict.get('pilot_id'),
+                'pilot_name': order_dict.get('pilot_name', 'Unknown'),
+                'status': order_dict.get('status'),
+                'preferred_date': order_dict.get('preferred_date', ''),
+                'location_address': order_dict.get('location_address', ''),
+                'property_type': order_dict.get('property_type', ''),
+                'payment_amount': order_dict.get('payment_amount'),
+                'payment_status': order_dict.get('payment_status'),
+                'delivery_video_link': order_dict.get('delivery_video_link'),
+                'delivery_drive_link': order_dict.get('delivery_drive_link'),
+                'updated_at': order_dict.get('updated_at'),
+                'created_at': order_dict.get('created_at')
+            })
+
+        print(f"Returning {len(orders_list)} orders for editor")
+        response = jsonify(orders_list)
+        response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    except Exception as e:
+        print(f"Error in get_editor_assigned_orders: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'error': str(e)})
         response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response, 500

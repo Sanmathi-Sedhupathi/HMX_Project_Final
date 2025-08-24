@@ -46,6 +46,7 @@ const LoginPage: React.FC = () => {
       const role = response.data?.role;
       // route by role
       if (role === 'pilot') return navigate('/pilot', { replace: true });
+      if (role === 'editor') return navigate('/editor', { replace: true });
       if (role === 'referral') return navigate('/referral', { replace: true });
       if (role === 'admin') return navigate('/admin', { replace: true });
       // default to business/client dashboard

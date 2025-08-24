@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Calendar, Settings, LogOut, BarChart3, MessageSquare, Award, ChevronRight } from 'lucide-react';
+import { Calendar, Settings, LogOut, BarChart3, MessageSquare, Award, ChevronRight, Play, Video } from 'lucide-react';
 import axios from 'axios';
 import { authService } from '../services/api';
 import PhonePePayment from '../components/PhonePePayment';
@@ -41,7 +41,7 @@ const ClientDashboard: React.FC = () => {
       const response = await axios.get('http://localhost:5000/api/bookings', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       const bookings = response.data;
       const stats = {
         activeProjects: bookings.filter((b: any) => b.status === 'in_progress').length,
@@ -86,7 +86,7 @@ const ClientDashboard: React.FC = () => {
             {isSidebarOpen ? 'HMX Client' : 'HMX'}
           </h2>
         </div>
-        
+
         <div className="p-4 border-b border-primary-800">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-primary-700 rounded-full flex items-center justify-center">
@@ -100,23 +100,22 @@ const ClientDashboard: React.FC = () => {
             )}
           </div>
         </div>
-        
+
         <nav className="mt-6">
           {menuItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center px-4 py-3 transition-colors ${
-                location.pathname === item.path
+              className={`flex items-center px-4 py-3 transition-colors ${location.pathname === item.path
                   ? 'bg-primary-900 text-white'
                   : 'text-gray-300 hover:bg-primary-900 hover:text-white'
-              }`}
+                }`}
             >
               {item.icon}
               {isSidebarOpen && <span className="ml-3">{item.label}</span>}
             </Link>
           ))}
-          
+
           <button
             onClick={handleLogout}
             className="w-full flex items-center px-4 py-3 text-gray-300 hover:bg-primary-900 hover:text-white transition-colors mt-4"
@@ -249,42 +248,13 @@ const ProjectsContent: React.FC = () => {
     area_sqft: '',
     num_floors: ''
   });
-  const [costPreview, setCostPreview] = useState<{base: number|null, final: number|null, custom: string|null}>({base: null, final: null, custom: null});
-  const [costLoading, setCostLoading] = useState(false);
+  // Removed unused cost preview states - using direct calculation in form
 
   useEffect(() => {
     fetchBookings();
   }, []);
 
-  useEffect(() => {
-    const fetchCost = async () => {
-      if (newBooking.category && newBooking.area_sqft && newBooking.num_floors) {
-        setCostLoading(true);
-        try {
-          const res = await axios.post('http://localhost:5000/api/cost/preview', {
-            category: newBooking.category,
-            area_sqft: newBooking.area_sqft,
-            num_floors: newBooking.num_floors
-          });
-          setCostPreview({
-            base: res.data.base_cost,
-            final: res.data.final_cost,
-            custom: res.data.custom_quote
-          });
-        } catch (err) {
-          // fallback to local calculation if API fails
-          const area = parseInt(newBooking.area_sqft);
-          const floors = parseInt(newBooking.num_floors);
-          setCostPreview(calculateCost(newBooking.category, area, floors));
-        } finally {
-          setCostLoading(false);
-        }
-      } else {
-        setCostPreview({ base: null, final: null, custom: null });
-      }
-    };
-    fetchCost();
-  }, [newBooking.category, newBooking.area_sqft, newBooking.num_floors]);
+
 
   const fetchBookings = async () => {
     try {
@@ -292,9 +262,11 @@ const ProjectsContent: React.FC = () => {
       const response = await axios.get('http://localhost:5000/api/bookings', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('Client bookings fetched:', response.data);
       setBookings(response.data);
       setLoading(false);
     } catch (err) {
+      console.error('Failed to fetch bookings:', err);
       setError('Failed to fetch bookings');
       setLoading(false);
     }
@@ -561,14 +533,23 @@ const ProjectsContent: React.FC = () => {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pilot</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Video</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {bookings.map((booking) => (
+            {bookings.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <div className="text-sm">
+                    No bookings found. Create your first booking to get started!
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              bookings.map((booking) => (
               <tr key={booking.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{booking.pilot_name || 'Unassigned'}</div>
@@ -578,29 +559,42 @@ const ProjectsContent: React.FC = () => {
                   {new Date(booking.preferred_date).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {booking.location}
+                  {booking.delivery_video_link || booking.delivery_drive_link ? (
+                    <a
+                      href={booking.delivery_video_link || booking.delivery_drive_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-blue-600 hover:text-blue-900 font-medium"
+                    >
+                      <Play size={16} className="mr-1" />
+                      Watch Video
+                    </a>
+                  ) : (
+                    <div className="inline-flex items-center text-gray-400">
+                      <Video size={16} className="mr-1" />
+                      Not available
+                    </div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    booking.status === 'completed' 
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.status === 'completed'
                       ? 'bg-green-100 text-green-800'
                       : booking.status === 'in_progress'
-                      ? 'bg-blue-100 text-blue-800'
-                      : booking.status === 'assigned'
-                      ? 'bg-purple-100 text-purple-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {booking.status.split('_').map((word: string) => 
+                        ? 'bg-blue-100 text-blue-800'
+                        : booking.status === 'assigned'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                    {booking.status.split('_').map((word: string) =>
                       word.charAt(0).toUpperCase() + word.slice(1)
                     ).join(' ')}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    booking.payment_status === 'paid'
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.payment_status === 'paid'
                       ? 'bg-green-100 text-green-800'
                       : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                    }`}>
                     {booking.payment_status.charAt(0).toUpperCase() + booking.payment_status.slice(1)}
                   </span>
                 </td>
@@ -636,7 +630,8 @@ const ProjectsContent: React.FC = () => {
                   )}
                 </td>
               </tr>
-            ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -667,25 +662,22 @@ const ProjectsContent: React.FC = () => {
                 <div className="flex items-center justify-between">
                   {[1, 2, 3, 4].map((step) => (
                     <div key={step} className="flex items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                        step <= currentStep
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step <= currentStep
                           ? 'bg-primary-600 text-white'
                           : 'bg-gray-200 text-gray-500'
-                      }`}>
+                        }`}>
                         {step}
                       </div>
-                      <div className={`ml-2 text-sm font-medium ${
-                        step <= currentStep ? 'text-primary-600' : 'text-gray-500'
-                      }`}>
+                      <div className={`ml-2 text-sm font-medium ${step <= currentStep ? 'text-primary-600' : 'text-gray-500'
+                        }`}>
                         {step === 1 && 'Project Details'}
                         {step === 2 && 'Video Specs'}
                         {step === 3 && 'Cost Calculation'}
                         {step === 4 && 'Review & Submit'}
                       </div>
                       {step < 4 && (
-                        <div className={`ml-4 w-16 h-0.5 ${
-                          step < currentStep ? 'bg-primary-600' : 'bg-gray-200'
-                        }`} />
+                        <div className={`ml-4 w-16 h-0.5 ${step < currentStep ? 'bg-primary-600' : 'bg-gray-200'
+                          }`} />
                       )}
                     </div>
                   ))}
@@ -702,144 +694,144 @@ const ProjectsContent: React.FC = () => {
                       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         📍 Step 1: Project / Shoot Details
                       </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Location of Shoot (Address)</label>
-                      <textarea
-                        value={newBooking.location_address}
-                        onChange={e => setNewBooking({ ...newBooking, location_address: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="Enter complete address of the shoot location"
-                        rows={2}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">GPS Coordinates (Optional)</label>
-                      <input
-                        type="text"
-                        value={newBooking.gps_coordinates}
-                        onChange={e => setNewBooking({ ...newBooking, gps_coordinates: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="e.g. 12.9716, 77.5946"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Type of Property / Business</label>
-                      <select
-                        value={newBooking.property_type}
-                        onChange={e => setNewBooking({ ...newBooking, property_type: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        required
-                      >
-                        <option value="">Select Property Type</option>
-                        <option value="Hotel">Hotel</option>
-                        <option value="Real Estate">Real Estate</option>
-                        <option value="Factory">Factory</option>
-                        <option value="Showroom">Showroom</option>
-                        <option value="Resort">Resort</option>
-                        <option value="Restaurant">Restaurant</option>
-                        <option value="Office">Office</option>
-                        <option value="Warehouse">Warehouse</option>
-                        <option value="Retail Store">Retail Store</option>
-                        <option value="Event Venue">Event Venue</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Indoor / Outdoor / Both</label>
-                      <select
-                        value={newBooking.indoor_outdoor}
-                        onChange={e => setNewBooking({ ...newBooking, indoor_outdoor: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        required
-                      >
-                        <option value="">Select Type</option>
-                        <option value="Indoor">Indoor</option>
-                        <option value="Outdoor">Outdoor</option>
-                        <option value="Both">Both</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Area Size</label>
-                      <div className="flex space-x-2">
-                        <input
-                          type="number"
-                          min="1"
-                          value={newBooking.area_size}
-                          onChange={e => setNewBooking({ ...newBooking, area_size: e.target.value })}
-                          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                          placeholder="e.g. 2500"
-                          required
-                        />
-                        <select
-                          value={newBooking.area_unit}
-                          onChange={e => setNewBooking({ ...newBooking, area_unit: e.target.value })}
-                          className="w-24 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        >
-                          <option value="sq_ft">sq. ft</option>
-                          <option value="acres">acres</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Number of Rooms / Sections / Areas to Cover</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={newBooking.rooms_sections}
-                        onChange={e => setNewBooking({ ...newBooking, rooms_sections: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="e.g. 5"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
-                      <input
-                        type="date"
-                        value={newBooking.preferred_date}
-                        onChange={e => setNewBooking({ ...newBooking, preferred_date: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Time</label>
-                      <select
-                        value={newBooking.preferred_time}
-                        onChange={e => setNewBooking({ ...newBooking, preferred_time: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        required
-                      >
-                        <option value="">Select Time</option>
-                        <option value="Morning (6 AM - 12 PM)">Morning (6 AM - 12 PM)</option>
-                        <option value="Afternoon (12 PM - 6 PM)">Afternoon (12 PM - 6 PM)</option>
-                        <option value="Evening (6 PM - 10 PM)">Evening (6 PM - 10 PM)</option>
-                        <option value="Flexible">Flexible</option>
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Special Requirements</label>
-                      <textarea
-                        value={newBooking.special_requirements}
-                        onChange={e => setNewBooking({ ...newBooking, special_requirements: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="branding, guided voiceover, additional editing, etc."
-                        rows={2}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={newBooking.drone_permissions_required}
-                          onChange={e => setNewBooking({ ...newBooking, drone_permissions_required: e.target.checked })}
-                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Drone Flight Permissions Required?</span>
-                      </label>
-                    </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Location of Shoot (Address)</label>
+                          <textarea
+                            value={newBooking.location_address}
+                            onChange={e => setNewBooking({ ...newBooking, location_address: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="Enter complete address of the shoot location"
+                            rows={2}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">GPS Coordinates (Optional)</label>
+                          <input
+                            type="text"
+                            value={newBooking.gps_coordinates}
+                            onChange={e => setNewBooking({ ...newBooking, gps_coordinates: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="e.g. 12.9716, 77.5946"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Type of Property / Business</label>
+                          <select
+                            value={newBooking.property_type}
+                            onChange={e => setNewBooking({ ...newBooking, property_type: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            required
+                          >
+                            <option value="">Select Property Type</option>
+                            <option value="Hotel">Hotel</option>
+                            <option value="Real Estate">Real Estate</option>
+                            <option value="Factory">Factory</option>
+                            <option value="Showroom">Showroom</option>
+                            <option value="Resort">Resort</option>
+                            <option value="Restaurant">Restaurant</option>
+                            <option value="Office">Office</option>
+                            <option value="Warehouse">Warehouse</option>
+                            <option value="Retail Store">Retail Store</option>
+                            <option value="Event Venue">Event Venue</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Indoor / Outdoor / Both</label>
+                          <select
+                            value={newBooking.indoor_outdoor}
+                            onChange={e => setNewBooking({ ...newBooking, indoor_outdoor: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            required
+                          >
+                            <option value="">Select Type</option>
+                            <option value="Indoor">Indoor</option>
+                            <option value="Outdoor">Outdoor</option>
+                            <option value="Both">Both</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Area Size</label>
+                          <div className="flex space-x-2">
+                            <input
+                              type="number"
+                              min="1"
+                              value={newBooking.area_size}
+                              onChange={e => setNewBooking({ ...newBooking, area_size: e.target.value })}
+                              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                              placeholder="e.g. 2500"
+                              required
+                            />
+                            <select
+                              value={newBooking.area_unit}
+                              onChange={e => setNewBooking({ ...newBooking, area_unit: e.target.value })}
+                              className="w-24 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            >
+                              <option value="sq_ft">sq. ft</option>
+                              <option value="acres">acres</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Number of Rooms / Sections / Areas to Cover</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={newBooking.rooms_sections}
+                            onChange={e => setNewBooking({ ...newBooking, rooms_sections: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="e.g. 5"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
+                          <input
+                            type="date"
+                            value={newBooking.preferred_date}
+                            onChange={e => setNewBooking({ ...newBooking, preferred_date: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Time</label>
+                          <select
+                            value={newBooking.preferred_time}
+                            onChange={e => setNewBooking({ ...newBooking, preferred_time: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            required
+                          >
+                            <option value="">Select Time</option>
+                            <option value="Morning (6 AM - 12 PM)">Morning (6 AM - 12 PM)</option>
+                            <option value="Afternoon (12 PM - 6 PM)">Afternoon (12 PM - 6 PM)</option>
+                            <option value="Evening (6 PM - 10 PM)">Evening (6 PM - 10 PM)</option>
+                            <option value="Flexible">Flexible</option>
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Special Requirements</label>
+                          <textarea
+                            value={newBooking.special_requirements}
+                            onChange={e => setNewBooking({ ...newBooking, special_requirements: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="branding, guided voiceover, additional editing, etc."
+                            rows={2}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={newBooking.drone_permissions_required}
+                              onChange={e => setNewBooking({ ...newBooking, drone_permissions_required: e.target.checked })}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Drone Flight Permissions Required?</span>
+                          </label>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -852,75 +844,75 @@ const ProjectsContent: React.FC = () => {
                       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         🎥 Step 2: Video Specifications
                       </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Type of FPV Tour</label>
-                      <select
-                        value={newBooking.fpv_tour_type}
-                        onChange={e => setNewBooking({ ...newBooking, fpv_tour_type: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        required
-                      >
-                        <option value="">Select Tour Type</option>
-                        <option value="Walkthrough Tour">Walkthrough Tour</option>
-                        <option value="Fly-through Tour">Fly-through Tour</option>
-                        <option value="Hybrid (Indoor + Outdoor)">Hybrid (Indoor + Outdoor)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Video Length Required (minutes)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="30"
-                        value={newBooking.video_length}
-                        onChange={e => setNewBooking({ ...newBooking, video_length: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="e.g. 3"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Resolution</label>
-                      <select
-                        value={newBooking.resolution}
-                        onChange={e => setNewBooking({ ...newBooking, resolution: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        required
-                      >
-                        <option value="">Select Resolution</option>
-                        <option value="Full HD (1080p)">Full HD (1080p)</option>
-                        <option value="4K">4K</option>
-                        <option value="6K">6K</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Editing Style</label>
-                      <select
-                        value={newBooking.editing_style}
-                        onChange={e => setNewBooking({ ...newBooking, editing_style: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        required
-                      >
-                        <option value="">Select Style</option>
-                        <option value="Cinematic">Cinematic</option>
-                        <option value="Informative">Informative</option>
-                        <option value="Fast-paced">Fast-paced</option>
-                        <option value="Luxury/Premium">Luxury/Premium</option>
-                        <option value="Corporate">Corporate</option>
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={newBooking.background_music_voiceover}
-                          onChange={e => setNewBooking({ ...newBooking, background_music_voiceover: e.target.checked })}
-                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Background Music / Voiceover Needed</span>
-                      </label>
-                    </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Type of FPV Tour</label>
+                          <select
+                            value={newBooking.fpv_tour_type}
+                            onChange={e => setNewBooking({ ...newBooking, fpv_tour_type: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            required
+                          >
+                            <option value="">Select Tour Type</option>
+                            <option value="Walkthrough Tour">Walkthrough Tour</option>
+                            <option value="Fly-through Tour">Fly-through Tour</option>
+                            <option value="Hybrid (Indoor + Outdoor)">Hybrid (Indoor + Outdoor)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Video Length Required (minutes)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="30"
+                            value={newBooking.video_length}
+                            onChange={e => setNewBooking({ ...newBooking, video_length: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="e.g. 3"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Resolution</label>
+                          <select
+                            value={newBooking.resolution}
+                            onChange={e => setNewBooking({ ...newBooking, resolution: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            required
+                          >
+                            <option value="">Select Resolution</option>
+                            <option value="Full HD (1080p)">Full HD (1080p)</option>
+                            <option value="4K">4K</option>
+                            <option value="6K">6K</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Editing Style</label>
+                          <select
+                            value={newBooking.editing_style}
+                            onChange={e => setNewBooking({ ...newBooking, editing_style: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            required
+                          >
+                            <option value="">Select Style</option>
+                            <option value="Cinematic">Cinematic</option>
+                            <option value="Informative">Informative</option>
+                            <option value="Fast-paced">Fast-paced</option>
+                            <option value="Luxury/Premium">Luxury/Premium</option>
+                            <option value="Corporate">Corporate</option>
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={newBooking.background_music_voiceover}
+                              onChange={e => setNewBooking({ ...newBooking, background_music_voiceover: e.target.checked })}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Background Music / Voiceover Needed</span>
+                          </label>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -933,130 +925,130 @@ const ProjectsContent: React.FC = () => {
                       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         💰 Step 3: Cost Calculation
                       </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Base Package Cost (₹)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={newBooking.base_package_cost}
-                        onChange={e => setNewBooking({ ...newBooking, base_package_cost: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="e.g. 25000"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Number of Shooting Hours / Days</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={newBooking.shooting_hours}
-                        onChange={e => setNewBooking({ ...newBooking, shooting_hours: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="e.g. 4"
-                      />
-                    </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Base Package Cost (₹)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={newBooking.base_package_cost}
+                            onChange={e => setNewBooking({ ...newBooking, base_package_cost: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="e.g. 25000"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Number of Shooting Hours / Days</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={newBooking.shooting_hours}
+                            onChange={e => setNewBooking({ ...newBooking, shooting_hours: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="e.g. 4"
+                          />
+                        </div>
 
-                    {/* Add-on Services */}
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Add-on Services</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newBooking.editing_color_grading}
-                            onChange={e => setNewBooking({ ...newBooking, editing_color_grading: e.target.checked })}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <span className="text-sm text-gray-700">Editing & Color Grading</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newBooking.voiceover_script}
-                            onChange={e => setNewBooking({ ...newBooking, voiceover_script: e.target.checked })}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <span className="text-sm text-gray-700">Voiceover / Script</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newBooking.background_music_licensed}
-                            onChange={e => setNewBooking({ ...newBooking, background_music_licensed: e.target.checked })}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <span className="text-sm text-gray-700">Background Music (licensed)</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newBooking.branding_overlay}
-                            onChange={e => setNewBooking({ ...newBooking, branding_overlay: e.target.checked })}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <span className="text-sm text-gray-700">Branding Overlay (logos/text)</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newBooking.multiple_revisions}
-                            onChange={e => setNewBooking({ ...newBooking, multiple_revisions: e.target.checked })}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <span className="text-sm text-gray-700">Multiple Revisions</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={newBooking.drone_licensing_fee}
-                            onChange={e => setNewBooking({ ...newBooking, drone_licensing_fee: e.target.checked })}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <span className="text-sm text-gray-700">Drone Licensing / Permission Fee</span>
-                        </label>
-                      </div>
-                    </div>
+                        {/* Add-on Services */}
+                        <div className="col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Add-on Services</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.editing_color_grading}
+                                onChange={e => setNewBooking({ ...newBooking, editing_color_grading: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Editing & Color Grading</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.voiceover_script}
+                                onChange={e => setNewBooking({ ...newBooking, voiceover_script: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Voiceover / Script</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.background_music_licensed}
+                                onChange={e => setNewBooking({ ...newBooking, background_music_licensed: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Background Music (licensed)</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.branding_overlay}
+                                onChange={e => setNewBooking({ ...newBooking, branding_overlay: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Branding Overlay (logos/text)</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.multiple_revisions}
+                                onChange={e => setNewBooking({ ...newBooking, multiple_revisions: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Multiple Revisions</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.drone_licensing_fee}
+                                onChange={e => setNewBooking({ ...newBooking, drone_licensing_fee: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Drone Licensing / Permission Fee</span>
+                            </label>
+                          </div>
+                        </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Travel & Logistics Cost (₹)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={newBooking.travel_cost}
-                        onChange={e => setNewBooking({ ...newBooking, travel_cost: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="e.g. 5000"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tax / GST %</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={newBooking.tax_percentage}
-                        onChange={e => setNewBooking({ ...newBooking, tax_percentage: parseFloat(e.target.value) || 0 })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="18"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Discount Code (Optional)</label>
-                      <input
-                        type="text"
-                        value={newBooking.discount_code}
-                        onChange={e => setNewBooking({ ...newBooking, discount_code: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                        placeholder="Enter discount code"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Cost (Auto-calculated)</label>
-                      <div className="text-2xl font-bold text-green-600">
-                        ₹ {newBooking.total_cost.toLocaleString('en-IN')}
-                      </div>
-                    </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Travel & Logistics Cost (₹)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={newBooking.travel_cost}
+                            onChange={e => setNewBooking({ ...newBooking, travel_cost: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="e.g. 5000"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Tax / GST %</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={newBooking.tax_percentage}
+                            onChange={e => setNewBooking({ ...newBooking, tax_percentage: parseFloat(e.target.value) || 0 })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="18"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Discount Code (Optional)</label>
+                          <input
+                            type="text"
+                            value={newBooking.discount_code}
+                            onChange={e => setNewBooking({ ...newBooking, discount_code: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="Enter discount code"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Total Cost (Auto-calculated)</label>
+                          <div className="text-2xl font-bold text-green-600">
+                            ₹ {newBooking.total_cost.toLocaleString('en-IN')}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1101,113 +1093,119 @@ const ProjectsContent: React.FC = () => {
                 <button
                   onClick={prevStep}
                   disabled={currentStep === 1}
-                  className={`px-6 py-2.5 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
-                    currentStep === 1
+                  className={`px-6 py-2.5 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${currentStep === 1
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                  }`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleNewBooking}
-                    disabled={
-                      !newBooking.location_address ||
-                      !newBooking.property_type ||
-                      !newBooking.indoor_outdoor ||
-                      !newBooking.area_size ||
-                      !newBooking.rooms_sections ||
-                      !newBooking.preferred_date ||
-                      !newBooking.preferred_time ||
-                      !newBooking.fpv_tour_type ||
-                      !newBooking.video_length ||
-                      !newBooking.resolution ||
-                      !newBooking.editing_style
-                    }
-                    className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
-                      !newBooking.location_address ||
-                      !newBooking.property_type ||
-                      !newBooking.indoor_outdoor ||
-                      !newBooking.area_size ||
-                      !newBooking.rooms_sections ||
-                      !newBooking.preferred_date ||
-                      !newBooking.preferred_time ||
-                      !newBooking.fpv_tour_type ||
-                      !newBooking.video_length ||
-                      !newBooking.resolution ||
-                      !newBooking.editing_style
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-primary-600 hover:bg-primary-700'
                     }`}
-                  >
-                    Create Booking
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                >
+                  {currentStep === 1 ? 'Cancel' : 'Previous'}
+                </button>
 
-      {/* Payment Modal */}
-      {showPaymentModal && selectedBooking && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Process Payment</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Amount</label>
-                  <input
-                    type="number"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                    placeholder="Enter payment amount"
-                    required
-                  />
-                </div>
-                <div className="flex justify-end space-x-3">
+                <div className="flex space-x-3">
                   <button
                     onClick={() => {
-                      setShowPaymentModal(false);
-                      setPaymentAmount('');
+                      setShowNewBookingModal(false);
+                      resetBookingForm();
                     }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                    className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                   >
                     Cancel
                   </button>
-                  <button
-                    onClick={() => handlePayment(selectedBooking.id)}
-                    className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
-                    disabled={!paymentAmount || isNaN(Number(paymentAmount))}
-                  >
-                    Pay
-                  </button>
+
+                  {currentStep < totalSteps ? (
+                    <button
+                      onClick={nextStep}
+                      disabled={!validateCurrentStep()}
+                      className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${!validateCurrentStep()
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-primary-600 hover:bg-primary-700'
+                        }`}
+                    >
+                      Next Step
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleNewBooking}
+                      disabled={!validateCurrentStep()}
+                      className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${!validateCurrentStep()
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700'
+                        }`}
+                    >
+                      Create Booking
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </div>
+        
       )}
 
-      {/* PhonePe Payment Modal */}
-      {showPhonePePayment && selectedBooking && (
-        <PhonePePayment
-          bookingId={selectedBooking.id}
-          amount={selectedBooking.final_cost || selectedBooking.base_cost || 0}
-          onSuccess={() => {
-            setShowPhonePePayment(false);
-            setSelectedBooking(null);
-            fetchBookings();
-          }}
-          onCancel={() => {
-            setShowPhonePePayment(false);
-            setSelectedBooking(null);
-          }}
-        />
-      )}
+{/* Payment Modal */ }
+{
+  showPaymentModal && selectedBooking && (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Process Payment</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Amount</label>
+              <input
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                placeholder="Enter payment amount"
+                required
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setPaymentAmount('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handlePayment(selectedBooking.id)}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
+                disabled={!paymentAmount || isNaN(Number(paymentAmount))}
+              >
+                Pay
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  )
+}
+
+{/* PhonePe Payment Modal */ }
+{
+  showPhonePePayment && selectedBooking && (
+    <PhonePePayment
+      bookingId={selectedBooking.id}
+      amount={selectedBooking.final_cost || selectedBooking.base_cost || 0}
+      onSuccess={() => {
+        setShowPhonePePayment(false);
+        setSelectedBooking(null);
+        fetchBookings();
+      }}
+      onCancel={() => {
+        setShowPhonePePayment(false);
+        setSelectedBooking(null);
+      }}
+    />
+  )
+}
+    </div >
   );
 };
 
@@ -1341,7 +1339,7 @@ const SettingsContent: React.FC = () => {
       await axios.delete('http://localhost:5000/api/clients/account', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       // Clear local storage and redirect to login
       localStorage.removeItem('token');
       navigate('/login', { replace: true });
@@ -1425,9 +1423,8 @@ const SettingsContent: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
-                loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'
-              }`}
+              className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'
+                }`}
             >
               {loading ? 'Saving...' : 'Save Changes'}
             </button>
@@ -1486,9 +1483,8 @@ const SettingsContent: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
-                loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'
-              }`}
+              className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'
+                }`}
             >
               {loading ? 'Updating...' : 'Update Password'}
             </button>
@@ -1510,11 +1506,10 @@ const SettingsContent: React.FC = () => {
             <button
               onClick={handleDeleteAccount}
               disabled={deleteLoading}
-              className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${
-                deleteLoading 
-                  ? 'bg-red-400 cursor-not-allowed' 
+              className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${deleteLoading
+                  ? 'bg-red-400 cursor-not-allowed'
                   : 'bg-red-600 hover:bg-red-700'
-              }`}
+                }`}
             >
               {deleteLoading ? 'Deleting...' : 'Delete Account'}
             </button>
@@ -1525,41 +1520,19 @@ const SettingsContent: React.FC = () => {
   );
 };
 
-const CATEGORY_OPTIONS = [
-  "Retail Store / Showroom",
-  "Restaurants & Cafes",
-  "Fitness & Sports Arenas",
-  "Resorts & Farmstays / Hotels",
-  "Real Estate Property",
-  "Shopping Mall / Complex",
-  "Adventure / Water Parks",
-  "Gaming & Entertainment Zones"
-];
-
-const CITY_LIST = [
-  'Mumbai',
-  'Pune',
-  'Delhi',
-  'Bangalore',
-  'Hyderabad',
-  'Chennai',
-  'Kolkata',
-  'Ahmedabad',
-  'Jaipur',
-  'Chandigarh',
-  'Lucknow'
-];
+// Removed unused CATEGORY_OPTIONS and CITY_LIST constants
+// These were legacy constants not used in the step-by-step form
 
 function calculateCost(category: string, area_sqft: number, num_floors: number) {
-  const COSTING_TABLE: Record<string, (number|null)[]> = {
-    "Retail Store / Showroom":      [5999,  9999,  15999, 20999, null],
-    "Restaurants & Cafes":          [7999, 11999, 19999, 25999, null],
-    "Fitness & Sports Arenas":      [9999, 13999, 22999, 31999, null],
-    "Resorts & Farmstays / Hotels": [11999,17999, 29999, 39999, null],
-    "Real Estate Property":         [13999,23999, 37999, 49999, null],
-    "Shopping Mall / Complex":      [15999,29999, 47999, 63999, null],
-    "Adventure / Water Parks":      [12999,23999, 39999, 55999, null],
-    "Gaming & Entertainment Zones": [10999,19999, 33999, 45999, null],
+  const COSTING_TABLE: Record<string, (number | null)[]> = {
+    "Retail Store / Showroom": [5999, 9999, 15999, 20999, null],
+    "Restaurants & Cafes": [7999, 11999, 19999, 25999, null],
+    "Fitness & Sports Arenas": [9999, 13999, 22999, 31999, null],
+    "Resorts & Farmstays / Hotels": [11999, 17999, 29999, 39999, null],
+    "Real Estate Property": [13999, 23999, 37999, 49999, null],
+    "Shopping Mall / Complex": [15999, 29999, 47999, 63999, null],
+    "Adventure / Water Parks": [12999, 23999, 39999, 55999, null],
+    "Gaming & Entertainment Zones": [10999, 19999, 33999, 45999, null],
   };
   const area_ranges = [1000, 5000, 10000, 50000];
   if (!COSTING_TABLE[category]) return { base: null, final: null, custom: 'Invalid category' };

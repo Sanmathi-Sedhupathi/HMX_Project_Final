@@ -11,7 +11,7 @@ import LoginPage from './pages/LoginPage';
 import PilotSignupPage from './pages/PilotSignupPage';
 import ReferralSignupPage from './pages/ReferralSignupPage';
 import EditorSignupPage from './pages/EditorSignupPage';
-import AdminDashboard from './pages/AdminDashboard';
+import AdminDashboard from './pages/AdminDashboardNew';
 import ClientDashboard from './pages/ClientDashboard';
 import PilotDashboard from './pages/PilotDashboard';
 import EditorDashboard from './pages/EditorDashboard';

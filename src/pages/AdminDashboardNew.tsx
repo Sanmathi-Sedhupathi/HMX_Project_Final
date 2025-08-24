@@ -25,7 +25,7 @@ import Payments from '../components/admin/Payments';
 import Cancellations from '../components/admin/Cancellations';
 import NewInquiries from '../components/admin/NewInquiries';
 import ReferralManagement from '../components/admin/ReferralManagement';
-import VideoReview from '../components/admin/VideoReview';
+import VideoReviews from '../components/admin/VideoReviews';
 import Settings from '../components/admin/Settings';
 import Help from '../components/admin/Help';
 import Applications from '../components/admin/Applications';
@@ -56,6 +56,8 @@ const AdminDashboard: React.FC = () => {
           navigate('/client');
         } else if (user.role === 'pilot') {
           navigate('/pilot');
+        } else if (user.role === 'editor') {
+          navigate('/editor');
         } else if (user.role === 'referral') {
           navigate('/referral');
         } else {
@@ -64,7 +66,6 @@ const AdminDashboard: React.FC = () => {
         return;
       }
 
-      console.log('Admin authentication verified:', user);
       setIsLoading(false);
     };
 
@@ -85,8 +86,7 @@ const AdminDashboard: React.FC = () => {
     { path: '/admin/cancellations', icon: <FileText size={20} />, label: 'Cancellations' },
     { path: '/admin/inquiries', icon: <MessageSquare size={20} />, label: 'Inquiries' },
     { path: '/admin/referrals', icon: <Users size={20} />, label: 'Referrals' },
-    { path: '/admin/videos/before', icon: <Video size={20} />, label: 'Before Videos' },
-    { path: '/admin/videos/after', icon: <Video size={20} />, label: 'After Videos' },
+    { path: '/admin/video-reviews', icon: <Video size={20} />, label: 'Video Reviews' },
     { path: '/admin/settings', icon: <SettingsIcon size={20} />, label: 'Settings' },
     { path: '/admin/help', icon: <HelpCircle size={20} />, label: 'Help' },
     { path: '/admin/users', icon: <Users size={20} />, label: 'Users' },
@@ -130,14 +130,16 @@ const AdminDashboard: React.FC = () => {
               <span className="ml-3">{item.label}</span>
             </button>
           ))}
+        </nav>
+        <div className="p-4 border-t">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100 mt-4 mb-4"
+            className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
           >
             <LogOut size={20} />
             <span className="ml-3">Logout</span>
           </button>
-        </nav>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -152,8 +154,7 @@ const AdminDashboard: React.FC = () => {
             <Route path="/cancellations" element={<Cancellations />} />
             <Route path="/inquiries" element={<NewInquiries />} />
             <Route path="/referrals" element={<ReferralManagement />} />
-            <Route path="/videos/before" element={<VideoReview type="before" />} />
-            <Route path="/videos/after" element={<VideoReview type="after" />} />
+            <Route path="/video-reviews" element={<VideoReviews />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/help" element={<Help />} />
             <Route path="/users" element={<UserManagement />} />
