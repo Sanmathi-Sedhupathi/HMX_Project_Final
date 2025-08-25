@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Eye, Edit, Trash2, Plus, X, User, Phone, Mail, Calendar, FileText, Shield, Plane, MapPin } from 'lucide-react';
+import AddPilotForm from './AddPilotForm';
 
 interface Pilot {
   id: number;
@@ -33,6 +34,7 @@ const PilotManagement: React.FC = () => {
   const [selectedPilot, setSelectedPilot] = useState<Pilot | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddPilotForm, setShowAddPilotForm] = useState(false);
   const [pilotDetails, setPilotDetails] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [formData, setFormData] = useState({
@@ -173,7 +175,7 @@ const PilotManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Pilot Management</h1>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => setShowAddPilotForm(true)}
           className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           <Plus size={20} className="mr-2" />
@@ -656,6 +658,16 @@ const PilotManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Add Pilot Form */}
+      <AddPilotForm
+        isOpen={showAddPilotForm}
+        onClose={() => setShowAddPilotForm(false)}
+        onSuccess={() => {
+          fetchPilots();
+          setShowAddPilotForm(false);
+        }}
+      />
     </div>
   );
 };

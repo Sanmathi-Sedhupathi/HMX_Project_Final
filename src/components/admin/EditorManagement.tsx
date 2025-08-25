@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Eye, Edit, Trash2, Plus, X, User, Phone, Mail, Calendar, FileText, Briefcase, Clock } from 'lucide-react';
+import AddEditorForm from './AddEditorForm';
 
 interface Editor {
   id: number;
@@ -28,6 +29,7 @@ const EditorManagement: React.FC = () => {
   const [selectedEditor, setSelectedEditor] = useState<Editor | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddEditorForm, setShowAddEditorForm] = useState(false);
   const [editorDetails, setEditorDetails] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [formData, setFormData] = useState({
@@ -166,7 +168,7 @@ const EditorManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Editor Management</h1>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => setShowAddEditorForm(true)}
           className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           <Plus size={20} className="mr-2" />
@@ -538,6 +540,16 @@ const EditorManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Add Editor Form */}
+      <AddEditorForm
+        isOpen={showAddEditorForm}
+        onClose={() => setShowAddEditorForm(false)}
+        onSuccess={() => {
+          fetchEditors();
+          setShowAddEditorForm(false);
+        }}
+      />
     </div>
   );
 };

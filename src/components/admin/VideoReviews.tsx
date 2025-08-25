@@ -248,8 +248,27 @@ const VideoReviews: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900 max-w-xs truncate">
-                      {review.submission_type === 'pilot' ? review.pilot_comments : review.editor_comments}
+                    <div className="space-y-1">
+                      {/* Pilot/Editor Comments */}
+                      {(review.submission_type === 'pilot' ? review.pilot_comments : review.editor_comments) && (
+                        <div className="text-sm text-gray-900 max-w-xs truncate">
+                          <span className="font-medium text-blue-600">
+                            {review.submission_type === 'pilot' ? 'Pilot: ' : 'Editor: '}
+                          </span>
+                          {review.submission_type === 'pilot' ? review.pilot_comments : review.editor_comments}
+                        </div>
+                      )}
+                      {/* Admin Comments */}
+                      {review.admin_comments && (
+                        <div className="text-sm text-gray-700 max-w-xs truncate">
+                          <span className="font-medium text-red-600">Admin: </span>
+                          {review.admin_comments}
+                        </div>
+                      )}
+                      {/* Show if no comments */}
+                      {!review.admin_comments && !(review.submission_type === 'pilot' ? review.pilot_comments : review.editor_comments) && (
+                        <span className="text-gray-400 text-sm">No comments</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium w-32">
@@ -275,9 +294,9 @@ const VideoReviews: React.FC = () => {
                       )}
                       {review.submission_type === 'editor' && review.status === 'submitted' && (
                         <button
-                          onClick={() => handleUpdateReview(review.video_id, 'completed')}
+                          onClick={() => handleUpdateReview(review.video_id, 'approved')}
                           className="text-green-600 hover:text-green-900"
-                          title="Mark Complete"
+                          title="Approve Video"
                         >
                           <CheckCircle size={16} />
                         </button>
@@ -342,33 +361,59 @@ const VideoReviews: React.FC = () => {
                   </div>
                 )}
 
-                {(selectedReview.pilot_comments || selectedReview.editor_comments) && (
-                  <div>
-                    <h3 className="font-semibold text-gray-700">{activeTab === 'pilot' ? 'Pilot' : 'Editor'} Comments</h3>
-                    <p className="mt-2 text-gray-900 bg-gray-50 p-3 rounded">
-                      {activeTab === 'pilot' ? selectedReview.pilot_comments : selectedReview.editor_comments}
-                    </p>
-                  </div>
-                )}
-
-                {selectedReview.admin_comments && (
-                  <div>
-                    <h3 className="font-semibold text-gray-700">Previous Admin Comments</h3>
-                    <p className="mt-2 text-gray-900 bg-gray-50 p-3 rounded">
-                      {selectedReview.admin_comments}
-                    </p>
-                  </div>
-                )}
-
+                {/* All Comments Section */}
                 <div>
-                  <h3 className="font-semibold text-gray-700">Admin Review</h3>
+                  <h3 className="font-semibold text-gray-700 mb-3">Comments History</h3>
+                  <div className="space-y-3">
+                    {/* Pilot Comments */}
+                    {selectedReview.pilot_comments && (
+                      <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400">
+                        <h4 className="font-medium text-blue-800 mb-1">Pilot Comments</h4>
+                        <p className="text-gray-900">{selectedReview.pilot_comments}</p>
+                      </div>
+                    )}
+
+                    {/* Editor Comments */}
+                    {selectedReview.editor_comments && (
+                      <div className="bg-purple-50 p-3 rounded-lg border-l-4 border-purple-400">
+                        <h4 className="font-medium text-purple-800 mb-1">Editor Comments</h4>
+                        <p className="text-gray-900">{selectedReview.editor_comments}</p>
+                      </div>
+                    )}
+
+                    {/* Previous Admin Comments */}
+                    {selectedReview.admin_comments && (
+                      <div className="bg-red-50 p-3 rounded-lg border-l-4 border-red-400">
+                        <h4 className="font-medium text-red-800 mb-1">Previous Admin Comments</h4>
+                        <p className="text-gray-900">{selectedReview.admin_comments}</p>
+                      </div>
+                    )}
+
+                    {/* No comments message */}
+                    {!selectedReview.pilot_comments && !selectedReview.editor_comments && !selectedReview.admin_comments && (
+                      <div className="bg-gray-50 p-3 rounded-lg text-center">
+                        <p className="text-gray-500">No comments yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Admin Review Section */}
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center">
+                    <MessageSquare size={18} className="mr-2 text-yellow-600" />
+                    Add Admin Review Comments
+                  </h3>
                   <textarea
                     value={adminComments}
                     onChange={(e) => setAdminComments(e.target.value)}
-                    placeholder="Enter your review comments..."
-                    className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Enter your review comments for the pilot/editor..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
                     rows={4}
                   />
+                  <p className="text-sm text-gray-600 mt-1">
+                    These comments will be visible to the {selectedReview.submission_type} and help guide improvements.
+                  </p>
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
@@ -384,7 +429,7 @@ const VideoReviews: React.FC = () => {
                   >
                     Request Changes
                   </button>
-                  {activeTab === 'pilot' && (
+                  {selectedReview.submission_type === 'pilot' && (
                     <button
                       onClick={() => handleUpdateReview(selectedReview.video_id, 'forwarded_to_editor', adminComments)}
                       className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -392,12 +437,12 @@ const VideoReviews: React.FC = () => {
                       Forward to Editor
                     </button>
                   )}
-                  {activeTab === 'editor' && (
+                  {selectedReview.submission_type === 'editor' && (
                     <button
-                      onClick={() => handleUpdateReview(selectedReview.video_id, 'completed', adminComments)}
+                      onClick={() => handleUpdateReview(selectedReview.video_id, 'approved', adminComments)}
                       className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
                     >
-                      Mark Complete
+                      Approve Video
                     </button>
                   )}
                 </div>

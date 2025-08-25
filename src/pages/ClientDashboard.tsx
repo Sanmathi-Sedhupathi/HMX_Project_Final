@@ -189,6 +189,41 @@ const ProjectsContent: React.FC = () => {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Calculate cost based on category, area, and floors
+
+
+  const calculateBookingCost = (propertyType: string, areaSize: number, numFloors: number) => {
+    const costingTable: Record<string, Record<string, number | string>> = {
+      'Retail Store / Showroom': { '<1000': 5999, '1000-5000': 9999, '5000-10000': 15999, '10000-50000': 20999, '50000+': 'Custom Quote' },
+      'Restaurants & Cafes': { '<1000': 7999, '1000-5000': 11999, '5000-10000': 19999, '10000-50000': 25999, '50000+': 'Custom Quote' },
+      'Fitness & Sports Arenas': { '<1000': 9999, '1000-5000': 13999, '5000-10000': 22999, '10000-50000': 31999, '50000+': 'Custom Quote' },
+      'Resorts & Farmstays / Hotels': { '<1000': 11999, '1000-5000': 17999, '5000-10000': 29999, '10000-50000': 39999, '50000+': 'Custom Quote' },
+      'Real Estate Property': { '<1000': 13999, '1000-5000': 23999, '5000-10000': 37999, '10000-50000': 49999, '50000+': 'Custom Quote' },
+      'Shopping Mall / Complex': { '<1000': 15999, '1000-5000': 29999, '5000-10000': 47999, '10000-50000': 63999, '50000+': 'Custom Quote' },
+      'Adventure / Water Parks': { '<1000': 12999, '1000-5000': 23999, '5000-10000': 39999, '10000-50000': 55999, '50000+': 'Custom Quote' },
+      'Gaming & Entertainment Zones': { '<1000': 10999, '1000-5000': 19999, '5000-10000': 33999, '10000-50000': 45999, '50000+': 'Custom Quote' }
+    };
+
+    // Determine area bracket
+    let areaBracket = '';
+    if (areaSize < 1000) areaBracket = '<1000';
+    else if (areaSize <= 5000) areaBracket = '1000-5000';
+    else if (areaSize <= 10000) areaBracket = '5000-10000';
+    else if (areaSize <= 50000) areaBracket = '10000-50000';
+    else areaBracket = '50000+';
+
+    // Get base cost
+    const baseCost = costingTable[propertyType]?.[areaBracket];
+    if (!baseCost || baseCost === 'Custom Quote') {
+      return 'Custom Quote';
+    }
+
+    // Calculate floor multiplier (10% per additional floor)
+    const floorMultiplier = 1 + ((numFloors - 1) * 0.1);
+
+    return Math.round((baseCost as number) * floorMultiplier);
+  };
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -200,7 +235,7 @@ const ProjectsContent: React.FC = () => {
   const [newBooking, setNewBooking] = useState({
     // Project/Shoot Details
     location_address: '',
-    gps_coordinates: '',
+    gps_link: '',
     property_type: '',
     indoor_outdoor: '',
     area_size: '',
@@ -218,15 +253,18 @@ const ProjectsContent: React.FC = () => {
     background_music_voiceover: false,
     editing_style: '',
 
+    // Enhanced Requirements
+    voiceover_script: false,
+    background_music_licensed: false,
+    branding_overlay: false,
+    multiple_revisions: false,
+    num_floors: 1,
+
     // Cost Calculation
     base_package_cost: '',
     area_covered: '',
     shooting_hours: '',
     editing_color_grading: false,
-    voiceover_script: false,
-    background_music_licensed: false,
-    branding_overlay: false,
-    multiple_revisions: false,
     drone_licensing_fee: false,
     travel_cost: '',
     tax_percentage: 18,
@@ -253,6 +291,21 @@ const ProjectsContent: React.FC = () => {
   useEffect(() => {
     fetchBookings();
   }, []);
+
+  // Update cost when relevant fields change
+  useEffect(() => {
+    if (newBooking.property_type && newBooking.area_size && newBooking.num_floors) {
+      const calculatedCost = calculateBookingCost(
+        newBooking.property_type,
+        parseFloat(newBooking.area_size),
+        parseInt(newBooking.num_floors)
+      );
+
+      if (calculatedCost !== 'Custom Quote') {
+        setNewBooking(prev => ({ ...prev, total_cost: calculatedCost as number }));
+      }
+    }
+  }, [newBooking.property_type, newBooking.area_size, newBooking.num_floors]);
 
 
 
@@ -352,7 +405,7 @@ const ProjectsContent: React.FC = () => {
     setNewBooking({
       // Project/Shoot Details
       location_address: '',
-      gps_coordinates: '',
+      gps_link: '',
       property_type: '',
       indoor_outdoor: '',
       area_size: '',
@@ -379,6 +432,7 @@ const ProjectsContent: React.FC = () => {
       background_music_licensed: false,
       branding_overlay: false,
       multiple_revisions: false,
+      num_floors: '1',
       drone_licensing_fee: false,
       travel_cost: '',
       tax_percentage: 18,
@@ -397,8 +451,7 @@ const ProjectsContent: React.FC = () => {
       industry: '',
       duration: '',
       category: '',
-      area_sqft: '',
-      num_floors: ''
+      area_sqft: ''
     });
   };
 
@@ -462,7 +515,7 @@ const ProjectsContent: React.FC = () => {
       const bookingData = {
         // Project/Shoot Details
         location_address: newBooking.location_address,
-        gps_coordinates: newBooking.gps_coordinates,
+        gps_link: newBooking.gps_link,
         property_type: newBooking.property_type,
         indoor_outdoor: newBooking.indoor_outdoor,
         area_size: parseFloat(newBooking.area_size) || 0,
@@ -707,13 +760,13 @@ const ProjectsContent: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">GPS Coordinates (Optional)</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">GPS Location Link (Optional)</label>
                           <input
-                            type="text"
-                            value={newBooking.gps_coordinates}
-                            onChange={e => setNewBooking({ ...newBooking, gps_coordinates: e.target.value })}
+                            type="url"
+                            value={newBooking.gps_link}
+                            onChange={e => setNewBooking({ ...newBooking, gps_link: e.target.value })}
                             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            placeholder="e.g. 12.9716, 77.5946"
+                            placeholder="e.g. https://maps.google.com/..."
                           />
                         </div>
                         <div>
@@ -787,6 +840,19 @@ const ProjectsContent: React.FC = () => {
                           />
                         </div>
                         <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Number of Floors</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={newBooking.num_floors}
+                            onChange={e => setNewBooking({ ...newBooking, num_floors: e.target.value })}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
+                            placeholder="e.g. 2"
+                            required
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Additional 10% per floor (excluding ground floor)</p>
+                        </div>
+                        <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
                           <input
                             type="date"
@@ -820,6 +886,49 @@ const ProjectsContent: React.FC = () => {
                             placeholder="branding, guided voiceover, additional editing, etc."
                             rows={2}
                           />
+                        </div>
+
+                        {/* Enhanced Requirements Section */}
+                        <div className="col-span-2">
+                          <h4 className="text-md font-medium text-gray-900 mb-3">Additional Services</h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.voiceover_script}
+                                onChange={e => setNewBooking({ ...newBooking, voiceover_script: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Professional Voiceover Script</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.background_music_licensed}
+                                onChange={e => setNewBooking({ ...newBooking, background_music_licensed: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Licensed Background Music</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.branding_overlay}
+                                onChange={e => setNewBooking({ ...newBooking, branding_overlay: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Branding Overlay</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={newBooking.multiple_revisions}
+                                onChange={e => setNewBooking({ ...newBooking, multiple_revisions: e.target.checked })}
+                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                              />
+                              <span className="text-sm text-gray-700">Multiple Revisions</span>
+                            </label>
+                          </div>
                         </div>
                         <div className="col-span-2">
                           <label className="flex items-center space-x-2">

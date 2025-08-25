@@ -4,6 +4,21 @@ import sqlite3
 import os
 import jwt
 from datetime import datetime, timedelta
+
+# Earnings calculation constants
+EARNINGS_PERCENTAGES = {
+    'pilot': 0.50,      # 50%
+    'editor': 0.15,     # 15%
+    'referral': 0.125,  # 12.5%
+    'hmx': 0.20,        # 20%
+    'payment_gateway': 0.025  # 2.5%
+}
+
+def calculate_earnings(total_amount, user_type):
+    """Calculate earnings for different user types"""
+    if user_type not in EARNINGS_PERCENTAGES:
+        return 0
+    return round(total_amount * EARNINGS_PERCENTAGES[user_type], 2)
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import hashlib
@@ -15,6 +30,15 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import threading
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ Environment variables loaded from .env file")
+except ImportError:
+    print("⚠️  python-dotenv not installed. Install with: pip install python-dotenv")
+    print("⚠️  Using system environment variables only")
 
 app = Flask(__name__)
 
@@ -33,6 +57,15 @@ EMAIL_CONFIG = {
     'EMAIL_PASSWORD': os.getenv('EMAIL_PASSWORD', ''),  # App password for Gmail
     'USE_TLS': os.getenv('USE_TLS', 'true').lower() == 'true'
 }
+
+# Debug email configuration
+print("📧 Email Configuration:")
+print(f"   SMTP Server: {EMAIL_CONFIG['SMTP_SERVER']}")
+print(f"   SMTP Port: {EMAIL_CONFIG['SMTP_PORT']}")
+print(f"   Email Address: {EMAIL_CONFIG['EMAIL_ADDRESS']}")
+print(f"   Password Set: {'Yes' if EMAIL_CONFIG['EMAIL_PASSWORD'] else 'No'}")
+print(f"   Use TLS: {EMAIL_CONFIG['USE_TLS']}")
+print()
 
 CITY_LIST = [
     'Mumbai',
@@ -71,6 +104,11 @@ def send_email_async(to_email, subject, body, is_html=False):
 def send_email_sync(to_email, subject, body, is_html=False):
     """Send email synchronously"""
     try:
+        print(f"📧 Attempting to send email to: {to_email}")
+        print(f"📧 Using SMTP: {EMAIL_CONFIG['SMTP_SERVER']}:{EMAIL_CONFIG['SMTP_PORT']}")
+        print(f"📧 From: {EMAIL_CONFIG['EMAIL_ADDRESS']}")
+        print(f"📧 Password configured: {'Yes' if EMAIL_CONFIG['EMAIL_PASSWORD'] else 'No'}")
+
         # Create message
         msg = MIMEMultipart('alternative')
         msg['From'] = EMAIL_CONFIG['EMAIL_ADDRESS']
@@ -83,26 +121,35 @@ def send_email_sync(to_email, subject, body, is_html=False):
         else:
             msg.attach(MIMEText(body, 'plain'))
 
+        print("📧 Connecting to SMTP server...")
         # Create SMTP session
         server = smtplib.SMTP(EMAIL_CONFIG['SMTP_SERVER'], EMAIL_CONFIG['SMTP_PORT'])
 
         if EMAIL_CONFIG['USE_TLS']:
+            print("📧 Starting TLS...")
             server.starttls()  # Enable security
 
         # Login if credentials are provided
         if EMAIL_CONFIG['EMAIL_PASSWORD']:
+            print("📧 Logging in with credentials...")
             server.login(EMAIL_CONFIG['EMAIL_ADDRESS'], EMAIL_CONFIG['EMAIL_PASSWORD'])
+        else:
+            print("⚠️  No password configured - attempting to send without authentication")
 
+        print("📧 Sending email...")
         # Send email
         text = msg.as_string()
         server.sendmail(EMAIL_CONFIG['EMAIL_ADDRESS'], to_email, text)
         server.quit()
 
-        print(f"Email sent successfully to {to_email}")
+        print(f"✅ Email sent successfully to {to_email}")
         return True
 
     except Exception as e:
-        print(f"Failed to send email to {to_email}: {str(e)}")
+        print(f"❌ Failed to send email to {to_email}: {str(e)}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        print(f"❌ Full traceback: {traceback.format_exc()}")
         return False
 
 def get_application_approval_email(applicant_name, application_type, admin_comments=""):
@@ -153,6 +200,47 @@ Best regards,
 HMX FPV Tours Team
 Email: support@hmxfpvtours.com
 Phone: +91 98765 43210
+"""
+    return subject, body
+
+def get_account_creation_email(user_name, user_email, user_password, user_role):
+    """Generate account creation email with login credentials"""
+    subject = f"Welcome to HMX FPV Tours - Your {user_role.title()} Account is Ready!"
+
+    body = f"""
+Dear {user_name},
+
+Welcome to HMX FPV Tours! Your {user_role} account has been successfully created by our admin team.
+
+LOGIN CREDENTIALS:
+Email: {user_email}
+Password: {user_password}
+
+IMPORTANT SECURITY NOTICE:
+- Please change your password immediately after your first login
+- Keep your login credentials secure and confidential
+- Do not share your password with anyone
+
+NEXT STEPS:
+1. Visit our platform: http://localhost:5173
+2. Log in using the credentials above
+3. Change your password in Settings
+4. Complete your profile setup
+5. Start exploring available opportunities
+
+DASHBOARD ACCESS:
+- Pilot Dashboard: http://localhost:5173/pilot
+- Editor Dashboard: http://localhost:5173/editor
+
+If you have any questions or need assistance, please contact our support team.
+
+Best regards,
+HMX FPV Tours Team
+Email: support@hmxfpvtours.com
+Phone: +91 98765 43210
+
+---
+This is an automated message. Please do not reply to this email.
 """
     return subject, body
 
@@ -339,7 +427,7 @@ def init_db():
             ('description', 'TEXT'),
             # Comprehensive booking details
             ('location_address', 'TEXT'),
-            ('gps_coordinates', 'TEXT'),
+            ('gps_link', 'TEXT'),
             ('property_type', 'TEXT'),
             ('indoor_outdoor', 'TEXT'),
             ('area_size', 'REAL'),
@@ -370,7 +458,13 @@ def init_db():
             ('total_cost', 'REAL'),
             ('editor_id', 'INTEGER'),
             ('pilot_id', 'INTEGER'),
-            ('delivery_video_link', 'TEXT')
+            ('delivery_video_link', 'TEXT'),
+            # Earnings columns
+            ('pilot_earnings', 'DECIMAL(10,2)'),
+            ('editor_earnings', 'DECIMAL(10,2)'),
+            ('referral_earnings', 'DECIMAL(10,2)'),
+            ('hmx_earnings', 'DECIMAL(10,2)'),
+            ('gateway_fees', 'DECIMAL(10,2)')
         ]
 
         for column_name, column_type in new_columns:
@@ -1543,7 +1637,7 @@ def get_bookings(current_user):
             print("Inserting comprehensive booking into database...")
             cursor.execute('''
                 INSERT INTO bookings (
-                    user_id, location_address, gps_coordinates, property_type, indoor_outdoor,
+                    user_id, location_address, gps_link, property_type, indoor_outdoor,
                     area_size, area_unit, rooms_sections, preferred_date, preferred_time,
                     special_requirements, drone_permissions_required, fpv_tour_type, video_length,
                     resolution, background_music_voiceover, editing_style, base_package_cost,
@@ -1556,7 +1650,7 @@ def get_bookings(current_user):
             ''', (
                 current_user['id'],
                 data['location_address'],
-                data.get('gps_coordinates', ''),
+                data.get('gps_link', ''),
                 data['property_type'],
                 data['indoor_outdoor'],
                 area_size,
@@ -3369,7 +3463,7 @@ def get_admin_orders(current_user):
                 # Location & Property
                 'location': order_dict.get('location', ''),
                 'location_address': order_dict.get('location_address', ''),
-                'gps_coordinates': order_dict.get('gps_coordinates', ''),
+                'gps_link': order_dict.get('gps_link', ''),
                 'property_type': order_dict.get('property_type', ''),
                 'industry': order_dict.get('category', ''),  # Use category instead of industry
                 'indoor_outdoor': order_dict.get('indoor_outdoor', ''),
@@ -4991,7 +5085,38 @@ def update_video_review(current_user, video_id):
 
                     # Update bookings table based on status and submission type
                     if data['status'] == 'forwarded_to_editor' and submission_type == 'pilot':
-                        cursor.execute('UPDATE bookings SET status = ? WHERE id = ?', ('editing', order_id))
+                        # When pilot video is forwarded to editor, update drive_link with latest pilot video
+                        cursor.execute('''
+                            UPDATE bookings
+                            SET status = 'editing', drive_link = ?
+                            WHERE id = ?
+                        ''', (drive_link, order_id))
+                        print(f"Updated booking {order_id} status to editing with pilot video link: {drive_link}")
+                    elif data['status'] == 'approved' and submission_type == 'pilot':
+                        # When admin approves pilot video, update drive_link with latest approved pilot video
+                        cursor.execute('''
+                            SELECT drive_link FROM video_reviews
+                            WHERE order_id = ? AND submission_type = 'pilot' AND status = 'approved'
+                            ORDER BY submitted_date DESC LIMIT 1
+                        ''', (order_id,))
+
+                        latest_approved = cursor.fetchone()
+                        if latest_approved:
+                            latest_drive_link = latest_approved[0]
+                            cursor.execute('''
+                                UPDATE bookings
+                                SET drive_link = ?
+                                WHERE id = ?
+                            ''', (latest_drive_link, order_id))
+                            print(f"Updated booking {order_id} drive_link with approved pilot video: {latest_drive_link}")
+                        else:
+                            # If no approved video found yet, use current video link
+                            cursor.execute('''
+                                UPDATE bookings
+                                SET drive_link = ?
+                                WHERE id = ?
+                            ''', (drive_link, order_id))
+                            print(f"Updated booking {order_id} drive_link with current pilot video: {drive_link}")
                     elif data['status'] == 'completed' and submission_type == 'editor':
                         # When marking editor video as completed, also update delivery link
                         cursor.execute('''
@@ -5013,13 +5138,39 @@ def update_video_review(current_user, video_id):
                         latest_approved = cursor.fetchone()
                         if latest_approved:
                             latest_drive_link = latest_approved[0]
-                            # Update the booking with the latest approved video link
+                            # Update the booking with the latest approved video link and calculate earnings
                             cursor.execute('''
                                 UPDATE bookings
                                 SET delivery_video_link = ?, status = 'completed'
                                 WHERE id = ?
                             ''', (latest_drive_link, order_id))
                             print(f"Updated booking {order_id} with approved video link: {latest_drive_link}")
+
+                            # Calculate and update earnings when order is completed
+                            cursor.execute('SELECT payment_amount, pilot_id, editor_id, referral_id FROM bookings WHERE id = ?', (order_id,))
+                            booking_data = cursor.fetchone()
+                            if booking_data and booking_data[0]:  # payment_amount exists
+                                payment_amount = booking_data[0]
+                                pilot_id = booking_data[1]
+                                editor_id = booking_data[2]
+                                referral_id = booking_data[3]
+
+                                # Calculate earnings for each party
+                                pilot_earnings = calculate_earnings(payment_amount, 'pilot')
+                                editor_earnings = calculate_earnings(payment_amount, 'editor')
+                                referral_earnings = calculate_earnings(payment_amount, 'referral') if referral_id else 0
+                                hmx_earnings = calculate_earnings(payment_amount, 'hmx')
+                                gateway_fees = calculate_earnings(payment_amount, 'payment_gateway')
+
+                                # Update earnings in bookings table
+                                cursor.execute('''
+                                    UPDATE bookings
+                                    SET pilot_earnings = ?, editor_earnings = ?, referral_earnings = ?,
+                                        hmx_earnings = ?, gateway_fees = ?
+                                    WHERE id = ?
+                                ''', (pilot_earnings, editor_earnings, referral_earnings, hmx_earnings, gateway_fees, order_id))
+
+                                print(f"Calculated earnings for order {order_id}: Pilot: ₹{pilot_earnings}, Editor: ₹{editor_earnings}, Referral: ₹{referral_earnings}")
                         else:
                             # If no approved video found yet, just update with current video link
                             cursor.execute('''
@@ -5085,14 +5236,26 @@ def pilot_video_submissions(current_user):
             data = request.json
             cursor = conn.cursor()
 
+            order_id = data.get('order_id')
+
+            # Auto-fill client_id from the booking
+            cursor.execute('SELECT user_id FROM bookings WHERE id = ?', (order_id,))
+            booking = cursor.fetchone()
+
+            if not booking:
+                return jsonify({'message': 'Booking not found'}), 404
+
+            client_id = booking['user_id']
+            print(f"Auto-filling client_id: {client_id} for pilot submission on order {order_id}")
+
             cursor.execute('''
                 INSERT INTO video_reviews (
                     order_id, client_id, pilot_id, drive_link, pilot_comments,
                     submission_type, status
                 ) VALUES (?, ?, ?, ?, ?, 'pilot', 'submitted')
             ''', (
-                data.get('order_id'),
-                data.get('client_id'),
+                order_id,
+                client_id,
                 current_user['user_id'],
                 data.get('drive_link'),
                 data.get('pilot_comments', '')
@@ -5154,16 +5317,29 @@ def editor_video_submissions(current_user):
             data = request.json
             cursor = conn.cursor()
 
+            order_id = data.get('order_id')
+
+            # Auto-fill client_id and pilot_id from the booking
+            cursor.execute('SELECT user_id, pilot_id FROM bookings WHERE id = ?', (order_id,))
+            booking = cursor.fetchone()
+
+            if not booking:
+                return jsonify({'message': 'Booking not found'}), 404
+
+            client_id = booking['user_id']
+            pilot_id = booking['pilot_id']
+            print(f"Auto-filling client_id: {client_id}, pilot_id: {pilot_id} for editor submission on order {order_id}")
+
             cursor.execute('''
                 INSERT INTO video_reviews (
                     order_id, client_id, editor_id, pilot_id, drive_link, editor_comments,
                     submission_type, status
                 ) VALUES (?, ?, ?, ?, ?, ?, 'editor', 'submitted')
             ''', (
-                data.get('order_id'),
-                data.get('client_id'),
+                order_id,
+                client_id,
                 current_user['user_id'],
-                data.get('pilot_id'),
+                pilot_id,
                 data.get('drive_link'),
                 data.get('editor_comments', '')
             ))
@@ -5487,15 +5663,29 @@ def submit_editor_video(current_user):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Insert new video submission
+        # Get client_id and pilot_id from the booking
+        cursor.execute('SELECT user_id, pilot_id FROM bookings WHERE id = ?', (order_id,))
+        booking = cursor.fetchone()
+
+        if not booking:
+            return jsonify({'message': 'Booking not found'}), 404
+
+        client_id = booking['user_id']
+        pilot_id = booking['pilot_id']
+
+        print(f"Auto-filling client_id: {client_id}, pilot_id: {pilot_id} for order {order_id}")
+
+        # Insert new video submission with auto-filled client_id and pilot_id
         cursor.execute('''
             INSERT INTO video_reviews (
-                order_id, editor_id, submission_type, drive_link,
+                order_id, client_id, editor_id, pilot_id, submission_type, drive_link,
                 editor_comments, status, submitted_date
-            ) VALUES (?, ?, 'editor', ?, ?, 'submitted', ?)
+            ) VALUES (?, ?, ?, ?, 'editor', ?, ?, 'submitted', ?)
         ''', (
             order_id,
+            client_id,
             current_user['user_id'],
+            pilot_id,
             drive_link,
             editor_comments,
             datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -5801,6 +5991,88 @@ def get_pilot_final_review(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/pilot/earnings', methods=['GET'])
+@token_required
+def get_pilot_earnings(current_user):
+    """Get pilot earnings summary"""
+    if current_user['role'] != 'pilot':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        pilot_id = current_user['user_id']
+
+        # Get total earnings
+        cursor.execute('''
+            SELECT
+                COALESCE(SUM(pilot_earnings), 0) as total_earnings,
+                COUNT(*) as completed_orders,
+                COALESCE(AVG(pilot_earnings), 0) as avg_earnings_per_order
+            FROM bookings
+            WHERE pilot_id = ? AND status = 'completed' AND pilot_earnings IS NOT NULL
+        ''', (pilot_id,))
+
+        earnings_data = cursor.fetchone()
+
+        # Get monthly earnings for current year
+        cursor.execute('''
+            SELECT
+                strftime('%m', completed_date) as month,
+                COALESCE(SUM(pilot_earnings), 0) as monthly_earnings,
+                COUNT(*) as monthly_orders
+            FROM bookings
+            WHERE pilot_id = ? AND status = 'completed'
+            AND strftime('%Y', completed_date) = strftime('%Y', 'now')
+            AND pilot_earnings IS NOT NULL
+            GROUP BY strftime('%m', completed_date)
+            ORDER BY month
+        ''', (pilot_id,))
+
+        monthly_data = cursor.fetchall()
+
+        # Get recent completed orders with earnings
+        cursor.execute('''
+            SELECT
+                id, payment_amount, pilot_earnings, completed_date,
+                property_type, location_address
+            FROM bookings
+            WHERE pilot_id = ? AND status = 'completed' AND pilot_earnings IS NOT NULL
+            ORDER BY completed_date DESC
+            LIMIT 10
+        ''', (pilot_id,))
+
+        recent_orders = cursor.fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'total_earnings': earnings_data[0] if earnings_data else 0,
+            'completed_orders': earnings_data[1] if earnings_data else 0,
+            'avg_earnings_per_order': earnings_data[2] if earnings_data else 0,
+            'monthly_earnings': [
+                {
+                    'month': row[0],
+                    'earnings': row[1],
+                    'orders': row[2]
+                } for row in monthly_data
+            ],
+            'recent_orders': [
+                {
+                    'id': row[0],
+                    'payment_amount': row[1],
+                    'pilot_earnings': row[2],
+                    'completed_date': row[3],
+                    'property_type': row[4],
+                    'location': row[5]
+                } for row in recent_orders
+            ]
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/editor/assigned-orders', methods=['GET', 'OPTIONS'])
 @token_required
 def get_editor_assigned_orders(current_user):
@@ -5890,6 +6162,421 @@ def get_editor_assigned_orders(current_user):
         response.headers.add('Access-Control-Allow-Origin', get_cors_origin())
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response, 500
+
+@app.route('/api/editor/earnings', methods=['GET'])
+@token_required
+def get_editor_earnings(current_user):
+    """Get editor earnings summary"""
+    if current_user['role'] != 'editor':
+        return jsonify({'message': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        editor_id = current_user['user_id']
+
+        # Get total earnings
+        cursor.execute('''
+            SELECT
+                COALESCE(SUM(editor_earnings), 0) as total_earnings,
+                COUNT(*) as completed_orders,
+                COALESCE(AVG(editor_earnings), 0) as avg_earnings_per_order
+            FROM bookings
+            WHERE editor_id = ? AND status = 'completed' AND editor_earnings IS NOT NULL
+        ''', (editor_id,))
+
+        earnings_data = cursor.fetchone()
+
+        # Get monthly earnings for current year
+        cursor.execute('''
+            SELECT
+                strftime('%m', completed_date) as month,
+                COALESCE(SUM(editor_earnings), 0) as monthly_earnings,
+                COUNT(*) as monthly_orders
+            FROM bookings
+            WHERE editor_id = ? AND status = 'completed'
+            AND strftime('%Y', completed_date) = strftime('%Y', 'now')
+            AND editor_earnings IS NOT NULL
+            GROUP BY strftime('%m', completed_date)
+            ORDER BY month
+        ''', (editor_id,))
+
+        monthly_data = cursor.fetchall()
+
+        # Get recent completed orders with earnings
+        cursor.execute('''
+            SELECT
+                id, payment_amount, editor_earnings, completed_date,
+                property_type, location_address
+            FROM bookings
+            WHERE editor_id = ? AND status = 'completed' AND editor_earnings IS NOT NULL
+            ORDER BY completed_date DESC
+            LIMIT 10
+        ''', (editor_id,))
+
+        recent_orders = cursor.fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'total_earnings': earnings_data[0] if earnings_data else 0,
+            'completed_orders': earnings_data[1] if earnings_data else 0,
+            'avg_earnings_per_order': earnings_data[2] if earnings_data else 0,
+            'monthly_earnings': [
+                {
+                    'month': row[0],
+                    'earnings': row[1],
+                    'orders': row[2]
+                } for row in monthly_data
+            ],
+            'recent_orders': [
+                {
+                    'id': row[0],
+                    'payment_amount': row[1],
+                    'editor_earnings': row[2],
+                    'completed_date': row[3],
+                    'property_type': row[4],
+                    'location': row[5]
+                } for row in recent_orders
+            ]
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Admin endpoints for adding entities directly to main database
+@app.route('/api/admin/pilots/create', methods=['POST'])
+@token_required
+def add_pilot_direct(current_user):
+    """Add pilot directly to main pilots table"""
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Hash the password
+        password_hash = generate_password_hash(data.get('password', 'pilot123'))
+
+        cursor.execute('''
+            INSERT INTO pilots (
+                name, full_name, email, phone, password, password_hash, date_of_birth, gender, address,
+                license_number, issuing_authority, license_issue_date, license_expiry_date,
+                drone_model, drone_serial, drone_uin, drone_category, total_flying_hours,
+                insurance_policy, insurance_validity, government_id_proof,
+                pilot_license_url, id_proof_url, training_certificate_url, photograph_url,
+                insurance_certificate_url, portfolio_url, cities, experience, equipment,
+                flight_records, bank_account, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get('name'), data.get('full_name'), data.get('email'), data.get('phone'),
+            data.get('password'), password_hash, data.get('date_of_birth'), data.get('gender'), data.get('address'),
+            data.get('license_number'), data.get('issuing_authority'), data.get('license_issue_date'),
+            data.get('license_expiry_date'), data.get('drone_model'), data.get('drone_serial'),
+            data.get('drone_uin'), data.get('drone_category'), data.get('total_flying_hours'),
+            data.get('insurance_policy'), data.get('insurance_validity'), data.get('government_id_proof'),
+            data.get('pilot_license_url'), data.get('id_proof_url'), data.get('training_certificate_url'),
+            data.get('photograph_url'), data.get('insurance_certificate_url'), data.get('portfolio_url'),
+            data.get('cities'), data.get('experience'), data.get('equipment'),
+            data.get('flight_records'), data.get('bank_account'), data.get('status', 'active')
+        ))
+
+        conn.commit()
+        conn.close()
+
+        # Send welcome email with credentials
+        try:
+            pilot_name = data.get('name') or data.get('full_name') or 'Pilot'
+            pilot_email = data.get('email')
+            pilot_password = data.get('password')
+
+            if pilot_email and pilot_password:
+                subject, body = get_account_creation_email(
+                    pilot_name, pilot_email, pilot_password, 'pilot'
+                )
+                send_email_async(pilot_email, subject, body)
+                print(f"Welcome email sent to pilot: {pilot_email}")
+            else:
+                print("Missing email or password for pilot welcome email")
+        except Exception as e:
+            print(f"Failed to send pilot welcome email: {str(e)}")
+
+        return jsonify({'message': 'Pilot added successfully'}), 201
+
+    except Exception as e:
+        print(f"Error adding pilot: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/editors/create', methods=['POST'])
+@token_required
+def add_editor_direct(current_user):
+    """Add editor directly to main editors table"""
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Hash the password
+        password_hash = generate_password_hash(data.get('password', 'editor123'))
+
+        cursor.execute('''
+            INSERT INTO editors (
+                name, full_name, email, phone, password_hash, role, years_experience,
+                primary_skills, specialization, portfolio_url, time_zone,
+                government_id_url, tax_gst_number, status, approval_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get('name'), data.get('full_name'), data.get('email'), data.get('phone'),
+            password_hash, data.get('role'), data.get('years_experience'),
+            data.get('primary_skills'), data.get('specialization'), data.get('portfolio_url'),
+            data.get('time_zone'), data.get('government_id_url'), data.get('tax_gst_number'),
+            data.get('status', 'active'), data.get('approval_status', 'approved')
+        ))
+
+        conn.commit()
+        conn.close()
+
+        # Send welcome email with credentials
+        try:
+            editor_name = data.get('name') or data.get('full_name') or 'Editor'
+            editor_email = data.get('email')
+            editor_password = data.get('password')
+
+            if editor_email and editor_password:
+                subject, body = get_account_creation_email(
+                    editor_name, editor_email, editor_password, 'editor'
+                )
+                send_email_async(editor_email, subject, body)
+                print(f"Welcome email sent to editor: {editor_email}")
+            else:
+                print("Missing email or password for editor welcome email")
+        except Exception as e:
+            print(f"Failed to send editor welcome email: {str(e)}")
+
+        return jsonify({'message': 'Editor added successfully'}), 201
+
+    except Exception as e:
+        print(f"Error adding editor: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/referrals', methods=['POST'])
+@token_required
+def add_referral_direct(current_user):
+    """Add referral directly to main referrals table"""
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO referrals (name, email, phone, status, commission_rate, total_earnings)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get('name'), data.get('email'), data.get('phone'),
+            data.get('status', 'active'), data.get('commission_rate', 10.0),
+            data.get('total_earnings', 0.0)
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'Referral added successfully'}), 201
+
+    except Exception as e:
+        print(f"Error adding referral: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/bookings', methods=['POST'])
+@token_required
+def add_booking_direct(current_user):
+    """Add booking directly to main bookings table"""
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        conn = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO bookings (
+                user_id, pilot_id, editor_id, referral_id, industry, category,
+                preferred_date, location, duration, requirements, status,
+                admin_comments, pilot_notes, client_notes, payment_status,
+                payment_amount, drive_link, property_type, location_address,
+                preferred_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data.get('user_id') or None, data.get('pilot_id') or None,
+            data.get('editor_id') or None, data.get('referral_id') or None,
+            data.get('industry'), data.get('category'), data.get('preferred_date'),
+            data.get('location'), data.get('duration'), data.get('requirements'),
+            data.get('status', 'pending'), data.get('admin_comments'),
+            data.get('pilot_notes'), data.get('client_notes'),
+            data.get('payment_status', 'pending'), data.get('payment_amount'),
+            data.get('drive_link'), data.get('property_type'),
+            data.get('location_address'), data.get('preferred_time')
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'Order added successfully'}), 201
+
+    except Exception as e:
+        print(f"Error adding order: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Password management endpoints
+@app.route('/api/auth/change-password', methods=['POST'])
+@token_required
+def change_password(current_user):
+    """Allow users to change their password"""
+    try:
+        data = request.get_json()
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+
+        if not current_password or not new_password:
+            return jsonify({'error': 'Current password and new password are required'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Get user's current password hash based on role
+        if current_user['role'] == 'pilot':
+            cursor.execute('SELECT password_hash FROM pilots WHERE id = ?', (current_user['user_id'],))
+        elif current_user['role'] == 'editor':
+            cursor.execute('SELECT password_hash FROM editors WHERE id = ?', (current_user['user_id'],))
+        else:
+            cursor.execute('SELECT password_hash FROM users WHERE id = ?', (current_user['user_id'],))
+
+        user_data = cursor.fetchone()
+        if not user_data:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Verify current password
+        if not check_password_hash(user_data['password_hash'], current_password):
+            return jsonify({'error': 'Current password is incorrect'}), 400
+
+        # Hash new password
+        new_password_hash = generate_password_hash(new_password)
+
+        # Update password based on role
+        if current_user['role'] == 'pilot':
+            cursor.execute('UPDATE pilots SET password_hash = ? WHERE id = ?',
+                         (new_password_hash, current_user['user_id']))
+        elif current_user['role'] == 'editor':
+            cursor.execute('UPDATE editors SET password_hash = ? WHERE id = ?',
+                         (new_password_hash, current_user['user_id']))
+        else:
+            cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                         (new_password_hash, current_user['user_id']))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'Password changed successfully'}), 200
+
+    except Exception as e:
+        print(f"Error changing password: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/reset-password', methods=['POST'])
+@token_required
+def admin_reset_password(current_user):
+    """Allow admin to reset user password"""
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        user_role = data.get('user_role')  # 'pilot', 'editor', 'user'
+        new_password = data.get('new_password')
+
+        if not user_id or not user_role or not new_password:
+            return jsonify({'error': 'User ID, role, and new password are required'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Hash new password
+        new_password_hash = generate_password_hash(new_password)
+
+        # Update password based on role
+        if user_role == 'pilot':
+            cursor.execute('UPDATE pilots SET password_hash = ? WHERE id = ?',
+                         (new_password_hash, user_id))
+        elif user_role == 'editor':
+            cursor.execute('UPDATE editors SET password_hash = ? WHERE id = ?',
+                         (new_password_hash, user_id))
+        else:
+            cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                         (new_password_hash, user_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': 'Password reset successfully'}), 200
+
+    except Exception as e:
+        print(f"Error resetting password: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Email testing endpoint
+@app.route('/api/admin/test-email', methods=['POST'])
+@token_required
+def test_email(current_user):
+    """Test email configuration by sending a test email"""
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        test_email = data.get('email')
+
+        if not test_email:
+            return jsonify({'error': 'Email address is required'}), 400
+
+        # Send test email
+        subject = "HMX FPV Tours - Email Configuration Test"
+        body = f"""
+Hello,
+
+This is a test email to verify that your HMX FPV Tours email configuration is working correctly.
+
+If you received this email, your email settings are properly configured!
+
+Test Details:
+- Sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+- SMTP Server: {EMAIL_CONFIG['SMTP_SERVER']}
+- From: {EMAIL_CONFIG['EMAIL_ADDRESS']}
+- To: {test_email}
+
+Best regards,
+HMX FPV Tours System
+"""
+
+        success = send_email_sync(test_email, subject, body)
+
+        if success:
+            return jsonify({'message': 'Test email sent successfully!'}), 200
+        else:
+            return jsonify({'error': 'Failed to send test email. Check email configuration.'}), 500
+
+    except Exception as e:
+        print(f"Error sending test email: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

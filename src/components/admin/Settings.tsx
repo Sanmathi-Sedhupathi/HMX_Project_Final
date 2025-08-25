@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, AlertCircle } from 'lucide-react';
+import { Save, AlertCircle, Mail, Send } from 'lucide-react';
+import EmailTestModal from './EmailTestModal';
 
 interface Settings {
   companyName: string;
@@ -34,6 +35,7 @@ const Settings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showEmailTest, setShowEmailTest] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -286,6 +288,56 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
+        {/* Email Configuration */}
+        <div className="bg-white rounded-lg shadow p-6 mt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Email Configuration</h2>
+            <button
+              type="button"
+              onClick={() => setShowEmailTest(true)}
+              className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+            >
+              <Send className="mr-2" size={14} />
+              Test Email
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex">
+                <AlertCircle className="text-yellow-600 mr-3 mt-0.5" size={16} />
+                <div>
+                  <h4 className="text-sm font-medium text-yellow-800 mb-1">Email Configuration Required</h4>
+                  <p className="text-sm text-yellow-700 mb-2">
+                    To send account creation emails, configure your email settings in the backend/.env file.
+                  </p>
+                  <div className="text-xs text-yellow-600">
+                    <p>1. Copy backend/.env.example to backend/.env</p>
+                    <p>2. Add your email credentials (Gmail App Password recommended)</p>
+                    <p>3. Restart the backend server</p>
+                    <p>4. Use the "Test Email" button to verify configuration</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex">
+                <Mail className="text-blue-600 mr-3 mt-0.5" size={16} />
+                <div>
+                  <h4 className="text-sm font-medium text-blue-800 mb-1">Automatic Email Features</h4>
+                  <div className="text-sm text-blue-700 space-y-1">
+                    <p>✅ Account creation emails with login credentials</p>
+                    <p>✅ Secure password generation and delivery</p>
+                    <p>✅ Welcome messages with dashboard links</p>
+                    <p>✅ Password change instructions</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-end">
           <button
             type="submit"
@@ -296,6 +348,12 @@ const Settings: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Email Test Modal */}
+      <EmailTestModal
+        isOpen={showEmailTest}
+        onClose={() => setShowEmailTest(false)}
+      />
     </div>
   );
 };

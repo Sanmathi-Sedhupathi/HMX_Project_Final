@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { Calendar, Settings, LogOut, BarChart3, MessageSquare, Award, MapPin, Menu, X, ChevronRight, Video, Play } from 'lucide-react';
+import { Calendar, Settings, LogOut, BarChart3, MessageSquare, Award, MapPin, Menu, X, ChevronRight, Video, Play, Eye } from 'lucide-react';
 import axios from 'axios';
 import { authService } from '../services/api';
 import VideoSubmissions from '../components/editor/VideoSubmissions';
+import BookingDetailsModal from '../components/common/BookingDetailsModal';
 
 const EditorDashboard: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -220,6 +221,8 @@ const OngoingOrdersContent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
+  const [showBookingDetails, setShowBookingDetails] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
 
   useEffect(() => {
     fetchOngoingOrders();
@@ -324,12 +327,24 @@ const OngoingOrdersContent: React.FC = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleViewHistory(order.id)}
-                    className="text-blue-600 hover:text-blue-900 font-medium"
-                  >
-                    View
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleViewHistory(order.id)}
+                      className="text-blue-600 hover:text-blue-900 font-medium"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedBooking(order);
+                        setShowBookingDetails(true);
+                      }}
+                      className="text-green-600 hover:text-green-900 font-medium flex items-center"
+                    >
+                      <Eye size={14} className="mr-1" />
+                      Details
+                    </button>
+                  </div>
                 </td>
               </tr>
               ))
@@ -337,6 +352,14 @@ const OngoingOrdersContent: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Booking Details Modal */}
+      <BookingDetailsModal
+        isOpen={showBookingDetails}
+        onClose={() => setShowBookingDetails(false)}
+        booking={selectedBooking}
+        userRole="editor"
+      />
     </div>
   );
 };
@@ -345,6 +368,8 @@ const CompletedOrdersContent: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showBookingDetails, setShowBookingDetails] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
 
   useEffect(() => {
     fetchCompletedOrders();
@@ -393,6 +418,7 @@ const CompletedOrdersContent: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Final Video</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -435,12 +461,32 @@ const CompletedOrdersContent: React.FC = () => {
                       <span className="text-gray-400">Not available</span>
                     )}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        setSelectedBooking(order);
+                        setShowBookingDetails(true);
+                      }}
+                      className="text-green-600 hover:text-green-900 font-medium flex items-center"
+                    >
+                      <Eye size={14} className="mr-1" />
+                      Details
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Booking Details Modal */}
+      <BookingDetailsModal
+        isOpen={showBookingDetails}
+        onClose={() => setShowBookingDetails(false)}
+        booking={selectedBooking}
+        userRole="editor"
+      />
     </div>
   );
 };

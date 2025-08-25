@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  FileText, 
-  MessageSquare, 
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  MessageSquare,
   LogOut,
   UserPlus,
   Video,
@@ -12,7 +12,8 @@ import {
   Settings as SettingsIcon,
   HelpCircle,
   Loader2,
-  Database
+  Database,
+  Plus
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import HomeContent from '../components/admin/HomeContent';
@@ -88,8 +89,6 @@ const AdminDashboard: React.FC = () => {
     { path: '/admin/referrals', icon: <Users size={20} />, label: 'Referrals' },
     { path: '/admin/video-reviews', icon: <Video size={20} />, label: 'Video Reviews' },
     { path: '/admin/settings', icon: <SettingsIcon size={20} />, label: 'Settings' },
-    { path: '/admin/help', icon: <HelpCircle size={20} />, label: 'Help' },
-    { path: '/admin/users', icon: <Users size={20} />, label: 'Users' },
     { path: '/admin/database', icon: <Database size={20} />, label: 'Client Database' },
     { path: '/admin/applications', icon: <FileText size={20} />, label: 'Applications' }
   ];
@@ -156,8 +155,6 @@ const AdminDashboard: React.FC = () => {
             <Route path="/referrals" element={<ReferralManagement />} />
             <Route path="/video-reviews" element={<VideoReviews />} />
             <Route path="/settings" element={<Settings />} />
-            <Route path="/help" element={<Help />} />
-            <Route path="/users" element={<UserManagement />} />
             <Route path="/database" element={<ClientDatabase />} />
             <Route path="/applications" element={<Applications />} />
           </Routes>
