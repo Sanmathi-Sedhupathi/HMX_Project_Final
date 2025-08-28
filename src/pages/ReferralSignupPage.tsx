@@ -28,7 +28,11 @@ const ReferralSignupPage: React.FC = () => {
     agreeTerms: false,
   });
   
-  const [errors, setErrors] = useState<Partial<FormData>>({});
+  interface Errors extends Partial<FormData> {
+    submit?: string;
+  }
+  
+  const [errors, setErrors] = useState<Errors>({});
   const [step, setStep] = useState<number>(1);
   const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
   

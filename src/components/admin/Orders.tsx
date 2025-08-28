@@ -30,7 +30,7 @@ interface Order {
   preferred_date: string;
   preferred_time: string;
   location_address: string;
-  gps_coordinates: string;
+  gps_link: string;
   property_type: string;
   indoor_outdoor: string;
   area_size: number;
@@ -95,7 +95,7 @@ const Orders: React.FC = () => {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/admin/orders?status=${activeTab}`, {
+      const response = await fetch(`/api/admin/orders?status=${activeTab}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -133,7 +133,7 @@ const Orders: React.FC = () => {
 
   const fetchPilots = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/pilots', {
+      const response = await fetch('/api/admin/pilots', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -147,7 +147,7 @@ const Orders: React.FC = () => {
 
   const fetchEditors = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/editors', {
+      const response = await fetch('/api/admin/editors', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -161,7 +161,7 @@ const Orders: React.FC = () => {
 
   const handleUpdateOrder = async (id: number, updates: any) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/admin/orders/${id}`, {
+      const response = await fetch(`/api/admin/orders/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -202,13 +202,13 @@ const Orders: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this order?')) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/admin/orders/${id}`, {
+      const response = await fetch(`/api/admin/orders/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (response.ok) {
         fetchOrders();
       }
@@ -303,11 +303,10 @@ const Orders: React.FC = () => {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as any)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.key
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab.key
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 {tab.label}
                 {activeTab === tab.key && (
@@ -338,153 +337,85 @@ const Orders: React.FC = () => {
 
 
       {/* Tab Content */}
+      {/* Tab Content */}
       {activeTab === 'pending' && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property Type</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preferred Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Cost</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pilot</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Editor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referral</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredOrders.length === 0 ? (
+          {/* Horizontal scroll wrapper */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
-                    <div className="text-lg font-medium mb-2">No pending orders found</div>
-                    <div className="text-sm">
-                      Orders will appear here when clients submit new bookings from the Client Dashboard.
-                      <br />
-                      Make sure clients are creating bookings with status 'pending'.
-                    </div>
-                  </td>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preferred Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Cost</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pilot</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Editor</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referral</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
-              ) : (
-                filteredOrders.filter(order => order.status === 'pending').map((order) => (
-                <tr key={order.id}>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-blue-600">{order.booking_id}</div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {order.client_id ? (
-                      <div>
-                        <a
-                          href={`/admin/clients/${order.client_id}`}
-                          className="text-blue-600 hover:text-blue-900 underline font-medium"
-                        >
-                          {order.client_name}
-                        </a>
-                        <div className="text-xs text-gray-500">{order.client_email}</div>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                      <div className="text-lg font-medium mb-2">No pending orders found</div>
+                      <div className="text-sm">
+                        Orders will appear here when clients submit new bookings from the Client Dashboard.
+                        <br />
+                        Make sure clients are creating bookings with status 'pending'.
                       </div>
-                    ) : (
-                      <span className="text-gray-500">No Client</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{order.property_type || order.industry || 'Not specified'}</div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="text-sm text-gray-900 max-w-24 truncate">
-                      {(order.location_address || order.location || 'Not specified').length > 20
-                        ? (order.location_address || order.location || 'Not specified').substring(0, 20) + '...'
-                        : (order.location_address || order.location || 'Not specified')
-                      }
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {order.preferred_date ? new Date(order.preferred_date).toLocaleDateString() : 'Not specified'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {formatCurrency(order.total_cost || order.total_amount || 0)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {order.pilot_id ? (
-                      <a
-                        href={`/admin/pilots/${order.pilot_id}`}
-                        className="text-blue-600 hover:text-blue-900 underline text-sm"
-                      >
-                        {order.pilot_name}
-                      </a>
-                    ) : (
-                      <span className="text-gray-500 text-sm">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {order.editor_id ? (
-                      <a
-                        href={`/admin/editors/${order.editor_id}`}
-                        className="text-blue-600 hover:text-blue-900 underline text-sm"
-                      >
-                        {order.editor_name}
-                      </a>
-                    ) : (
-                      <span className="text-gray-500 text-sm">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    {order.referral_id ? (
-                      <span className="text-sm text-gray-900">{order.referral_name || `REF-${order.referral_id}`}</span>
-                    ) : (
-                      <span className="text-gray-500 text-sm">None</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setShowDetailsModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="View Details"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteOrder(order.id)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleApproveOrder(order.id)}
-                        className="text-green-600 hover:text-green-900"
-                        title="Approve"
-                      >
-                        <CheckCircle size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setShowRejectModal(true);
-                        }}
-                        className="text-red-600 hover:text-red-900"
-                        title="Reject"
-                      >
-                        <XCircle size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOrders.filter(order => order.status === 'pending').map((order) => (
+                    <tr key={order.id}>
+                      <td className="px-4 py-4 whitespace-nowrap">{order.booking_id}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        {order.client_id ? (
+                          <div>
+                            <a href={`/admin/clients/${order.client_id}`} className="text-blue-600 hover:text-blue-900 underline font-medium">
+                              {order.client_name}
+                            </a>
+                            <div className="text-xs text-gray-500">{order.client_email}</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500">No Client</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">{order.property_type || order.industry || 'Not specified'}</td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900 max-w-24 truncate">
+                          {(order.location_address || order.location || 'Not specified').length > 20
+                            ? (order.location_address || order.location || 'Not specified').substring(0, 20) + '...'
+                            : (order.location_address || order.location || 'Not specified')
+                          }
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">{order.preferred_date ? new Date(order.preferred_date).toLocaleDateString() : 'Not specified'}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">{formatCurrency(order.total_cost || order.total_amount || 0)}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">{order.pilot_id ? <a href={`/admin/pilots/${order.pilot_id}`} className="text-blue-600 hover:text-blue-900 underline text-sm">{order.pilot_name}</a> : <span className="text-gray-500 text-sm">Unassigned</span>}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">{order.editor_id ? <a href={`/admin/editors/${order.editor_id}`} className="text-blue-600 hover:text-blue-900 underline text-sm">{order.editor_name}</a> : <span className="text-gray-500 text-sm">Unassigned</span>}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">{order.referral_id ? <span className="text-sm text-gray-900">{order.referral_name || `REF-${order.referral_id}`}</span> : <span className="text-gray-500 text-sm">None</span>}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end space-x-2">
+                          <button onClick={() => { setSelectedOrder(order); setShowDetailsModal(true); }} className="text-blue-600 hover:text-blue-900" title="View Details"><Eye size={16} /></button>
+                          <button onClick={() => handleDeleteOrder(order.id)} className="text-red-600 hover:text-red-900" title="Delete"><Trash2 size={16} /></button>
+                          <button onClick={() => handleApproveOrder(order.id)} className="text-green-600 hover:text-green-900" title="Approve"><CheckCircle size={16} /></button>
+                          <button onClick={() => { setSelectedOrder(order); setShowRejectModal(true); }} className="text-red-600 hover:text-red-900" title="Reject"><XCircle size={16} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
+
 
       {/* Ongoing Orders Tab */}
       {activeTab === 'ongoing' && (
@@ -852,7 +783,7 @@ const Orders: React.FC = () => {
                         value={selectedOrder.status}
                         onChange={(e) => {
                           handleStatusChange(selectedOrder.id, e.target.value);
-                          setSelectedOrder({...selectedOrder, status: e.target.value});
+                          setSelectedOrder({ ...selectedOrder, status: e.target.value });
                         }}
                         className={`ml-2 px-3 py-1 text-sm font-semibold rounded-md border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 cursor-pointer ${getStatusColor(selectedOrder.status)}`}
                         title="Click to change status"
@@ -939,7 +870,7 @@ const Orders: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-sm font-medium text-gray-600">GPS Coordinates:</span>
-                      <p className="text-gray-900">{selectedOrder.gps_coordinates || 'Not provided'}</p>
+                      <p className="text-gray-900">{selectedOrder.gps_link || 'Not provided'}</p>
                     </div>
                     <div>
                       <span className="text-sm font-medium text-gray-600">Property Type:</span>
@@ -980,13 +911,10 @@ const Orders: React.FC = () => {
                       <span className="text-sm font-medium text-gray-600">Preferred Time:</span>
                       <p className="text-gray-900">{selectedOrder.preferred_time || 'Not specified'}</p>
                     </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Shooting Hours:</span>
-                      <p className="text-gray-900">{selectedOrder.shooting_hours || 'Not specified'}</p>
-                    </div>
+                    
                     <div>
                       <span className="text-sm font-medium text-gray-600">Area Covered:</span>
-                      <p className="text-gray-900">{selectedOrder.area_covered || 'Not specified'}</p>
+                      <p className="text-gray-900">{selectedOrder.area_size || 'Not specified'}</p>
                     </div>
                   </div>
                 </div>

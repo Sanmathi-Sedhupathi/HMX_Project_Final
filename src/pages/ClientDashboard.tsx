@@ -107,8 +107,8 @@ const ClientDashboard: React.FC = () => {
               key={item.path}
               to={item.path}
               className={`flex items-center px-4 py-3 transition-colors ${location.pathname === item.path
-                  ? 'bg-primary-900 text-white'
-                  : 'text-gray-300 hover:bg-primary-900 hover:text-white'
+                ? 'bg-primary-900 text-white'
+                : 'text-gray-300 hover:bg-primary-900 hover:text-white'
                 }`}
             >
               {item.icon}
@@ -184,173 +184,14 @@ const DashboardContent: React.FC<{ stats: any }> = ({ stats }) => (
     </div>
   </div>
 );
-
 const ProjectsContent: React.FC = () => {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  // Calculate cost based on category, area, and floors
-
-
-  const calculateBookingCost = (propertyType: string, areaSize: number, numFloors: number) => {
-    const costingTable: Record<string, Record<string, number | string>> = {
-      'Retail Store / Showroom': { '<1000': 5999, '1000-5000': 9999, '5000-10000': 15999, '10000-50000': 20999, '50000+': 'Custom Quote' },
-      'Restaurants & Cafes': { '<1000': 7999, '1000-5000': 11999, '5000-10000': 19999, '10000-50000': 25999, '50000+': 'Custom Quote' },
-      'Fitness & Sports Arenas': { '<1000': 9999, '1000-5000': 13999, '5000-10000': 22999, '10000-50000': 31999, '50000+': 'Custom Quote' },
-      'Resorts & Farmstays / Hotels': { '<1000': 11999, '1000-5000': 17999, '5000-10000': 29999, '10000-50000': 39999, '50000+': 'Custom Quote' },
-      'Real Estate Property': { '<1000': 13999, '1000-5000': 23999, '5000-10000': 37999, '10000-50000': 49999, '50000+': 'Custom Quote' },
-      'Shopping Mall / Complex': { '<1000': 15999, '1000-5000': 29999, '5000-10000': 47999, '10000-50000': 63999, '50000+': 'Custom Quote' },
-      'Adventure / Water Parks': { '<1000': 12999, '1000-5000': 23999, '5000-10000': 39999, '10000-50000': 55999, '50000+': 'Custom Quote' },
-      'Gaming & Entertainment Zones': { '<1000': 10999, '1000-5000': 19999, '5000-10000': 33999, '10000-50000': 45999, '50000+': 'Custom Quote' }
-    };
-
-    // Determine area bracket
-    let areaBracket = '';
-    if (areaSize < 1000) areaBracket = '<1000';
-    else if (areaSize <= 5000) areaBracket = '1000-5000';
-    else if (areaSize <= 10000) areaBracket = '5000-10000';
-    else if (areaSize <= 50000) areaBracket = '10000-50000';
-    else areaBracket = '50000+';
-
-    // Get base cost
-    const baseCost = costingTable[propertyType]?.[areaBracket];
-    if (!baseCost || baseCost === 'Custom Quote') {
-      return 'Custom Quote';
-    }
-
-    // Calculate floor multiplier (10% per additional floor)
-    const floorMultiplier = 1 + ((numFloors - 1) * 0.1);
-
-    return Math.round((baseCost as number) * floorMultiplier);
-  };
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
-  const [showBookingDetails, setShowBookingDetails] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showPhonePePayment, setShowPhonePePayment] = useState(false);
-  const [showNewBookingModal, setShowNewBookingModal] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [currentStep, setCurrentStep] = useState(1);
-  const [totalSteps] = useState(4);
-  const [newBooking, setNewBooking] = useState({
-    // Project/Shoot Details
-    location_address: '',
-    gps_link: '',
-    property_type: '',
-    indoor_outdoor: '',
-    area_size: '',
-    area_unit: 'sq_ft',
-    rooms_sections: '',
-    preferred_date: '',
-    preferred_time: '',
-    special_requirements: '',
-    drone_permissions_required: false,
-
-    // Video Specifications
-    fpv_tour_type: '',
-    video_length: '',
-    resolution: '',
-    background_music_voiceover: false,
-    editing_style: '',
-
-    // Enhanced Requirements
-    voiceover_script: false,
-    background_music_licensed: false,
-    branding_overlay: false,
-    multiple_revisions: false,
-    num_floors: 1,
-
-    // Cost Calculation
-    base_package_cost: '',
-    area_covered: '',
-    shooting_hours: '',
-    editing_color_grading: false,
-    drone_licensing_fee: false,
-    travel_cost: '',
-    tax_percentage: 18,
-    discount_code: '',
-    discount_amount: 0,
-    total_cost: 0,
-
-    // Status fields (managed by admin, not shown in form)
-    status: 'pending',
-    payment_status: 'pending',
-
-    // Legacy fields for compatibility
-    location: '',
-    description: '',
-    requirements: '',
-    industry: '',
-    duration: '',
-    category: '',
-    area_sqft: '',
-    num_floors: ''
-  });
-  // Removed unused cost preview states - using direct calculation in form
-
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
-  // Update cost when relevant fields change
-  useEffect(() => {
-    if (newBooking.property_type && newBooking.area_size && newBooking.num_floors) {
-      const calculatedCost = calculateBookingCost(
-        newBooking.property_type,
-        parseFloat(newBooking.area_size),
-        parseInt(newBooking.num_floors)
-      );
-
-      if (calculatedCost !== 'Custom Quote') {
-        setNewBooking(prev => ({ ...prev, total_cost: calculatedCost as number }));
-      }
-    }
-  }, [newBooking.property_type, newBooking.area_size, newBooking.num_floors]);
-
-
-
-  const fetchBookings = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/bookings', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('Client bookings fetched:', response.data);
-      setBookings(response.data);
-      setLoading(false);
-    } catch (err) {
-      console.error('Failed to fetch bookings:', err);
-      setError('Failed to fetch bookings');
-      setLoading(false);
-    }
-  };
-
-  const handlePayment = async (bookingId: number) => {
-    if (!paymentAmount || isNaN(Number(paymentAmount))) {
-      setError('Please enter a valid payment amount');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:5000/api/bookings/${bookingId}/payment`, {
-        amount: Number(paymentAmount)
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setShowPaymentModal(false);
-      setPaymentAmount('');
-      fetchBookings();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to process payment');
-    }
-  };
-
   const handlePhonePePayment = (booking: any) => {
     setSelectedBooking(booking);
     setShowPhonePePayment(true);
   };
-
   // Step navigation functions
   const nextStep = () => {
     if (currentStep < totalSteps) {
@@ -364,154 +205,122 @@ const ProjectsContent: React.FC = () => {
     }
   };
 
-  // Validation functions for each step
-  const validateStep1 = () => {
-    return (
-      newBooking.location_address &&
-      newBooking.property_type &&
-      newBooking.indoor_outdoor &&
-      newBooking.area_size &&
-      newBooking.rooms_sections &&
-      newBooking.preferred_date &&
-      newBooking.preferred_time
-    );
+
+  // Pricing Table (updated)
+  const COSTING_TABLE: Record<string, (number | null)[]> = {
+    "Retail Store / Showroom": [5999, 9999, 15999, 20999, null],
+    "Restaurants & Cafes": [7999, 11999, 19999, 25999, null],
+    "Fitness & Sports Arenas": [9999, 13999, 22999, 31999, null],
+    "Resorts & Farmstays / Hotels": [11999, 17999, 29999, 39999, null],
+    "Real Estate Property": [13999, 23999, 37999, 49999, null],
+    "Shopping Mall / Complex": [15999, 29999, 47999, 63999, null],
+    "Adventure / Water Parks": [12999, 23999, 39999, 55999, null],
+    "Gaming & Entertainment Zones": [10999, 19999, 33999, 45999, null],
   };
 
-  const validateStep2 = () => {
-    return (
-      newBooking.fpv_tour_type &&
-      newBooking.video_length &&
-      newBooking.resolution &&
-      newBooking.editing_style
-    );
-  };
+  const AREA_RANGES = [1000, 5000, 10000, 50000];
 
-  const validateStep3 = () => {
-    return true; // Cost calculation step is optional
-  };
+  // Calculate base + final cost
+  const calculateCost = (category: string, area_sqft: number, num_floors: number) => {
+    if (!COSTING_TABLE[category]) return { base: null, final: null, custom: 'Invalid Category' };
+    if (area_sqft > 50000) return { base: null, final: null, custom: 'Custom Quote' };
 
-  const validateCurrentStep = () => {
-    switch (currentStep) {
-      case 1: return validateStep1();
-      case 2: return validateStep2();
-      case 3: return validateStep3();
-      case 4: return true; // Review step
-      default: return false;
-    }
-  };
-
-  const resetBookingForm = () => {
-    setCurrentStep(1);
-    setNewBooking({
-      // Project/Shoot Details
-      location_address: '',
-      gps_link: '',
-      property_type: '',
-      indoor_outdoor: '',
-      area_size: '',
-      area_unit: 'sq_ft',
-      rooms_sections: '',
-      preferred_date: '',
-      preferred_time: '',
-      special_requirements: '',
-      drone_permissions_required: false,
-
-      // Video Specifications
-      fpv_tour_type: '',
-      video_length: '',
-      resolution: '',
-      background_music_voiceover: false,
-      editing_style: '',
-
-      // Cost Calculation
-      base_package_cost: '',
-      area_covered: '',
-      shooting_hours: '',
-      editing_color_grading: false,
-      voiceover_script: false,
-      background_music_licensed: false,
-      branding_overlay: false,
-      multiple_revisions: false,
-      num_floors: '1',
-      drone_licensing_fee: false,
-      travel_cost: '',
-      tax_percentage: 18,
-      discount_code: '',
-      discount_amount: 0,
-      total_cost: 0,
-
-      // Status fields (managed by admin, not shown in form)
-      status: 'pending',
-      payment_status: 'pending',
-
-      // Legacy fields for compatibility
-      location: '',
-      description: '',
-      requirements: '',
-      industry: '',
-      duration: '',
-      category: '',
-      area_sqft: ''
-    });
-  };
-
-  // Calculate total cost
-  const calculateTotalCost = () => {
-    let total = 0;
-
-    // Base package cost
-    if (newBooking.base_package_cost) {
-      total += parseFloat(newBooking.base_package_cost);
+    let idx = 0;
+    for (let i = 0; i < AREA_RANGES.length; i++) {
+      if (area_sqft <= AREA_RANGES[i]) {
+        idx = i;
+        break;
+      }
+      idx = i + 1;
     }
 
-    // Add-on services (estimated costs)
-    if (newBooking.editing_color_grading) total += 5000;
-    if (newBooking.voiceover_script) total += 3000;
-    if (newBooking.background_music_licensed) total += 2000;
-    if (newBooking.branding_overlay) total += 2500;
-    if (newBooking.multiple_revisions) total += 3000;
-    if (newBooking.drone_licensing_fee) total += 1500;
+    const base = COSTING_TABLE[category][idx];
+    if (base == null) return { base: null, final: null, custom: 'Custom Quote' };
 
-    // Travel cost
-    if (newBooking.travel_cost) {
-      total += parseFloat(newBooking.travel_cost);
-    }
+    if (!num_floors || num_floors < 1) num_floors = 1;
+    const final = Math.round(base * (1 + 0.1 * (num_floors - 1)));
 
-    // Apply tax
-    if (newBooking.tax_percentage) {
-      total = total * (1 + newBooking.tax_percentage / 100);
-    }
-
-    // Apply discount
-    if (newBooking.discount_amount) {
-      total -= newBooking.discount_amount;
-    }
-
-    return Math.max(0, total);
+    return { base, final, custom: null };
   };
 
-  // Update total cost whenever relevant fields change
-  React.useEffect(() => {
-    const total = calculateTotalCost();
-    setNewBooking(prev => ({ ...prev, total_cost: total }));
-  }, [
-    newBooking.base_package_cost,
-    newBooking.editing_color_grading,
-    newBooking.voiceover_script,
-    newBooking.background_music_licensed,
-    newBooking.branding_overlay,
-    newBooking.multiple_revisions,
-    newBooking.drone_licensing_fee,
-    newBooking.travel_cost,
-    newBooking.tax_percentage,
-    newBooking.discount_amount
-  ]);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [showBookingDetails, setShowBookingDetails] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPhonePePayment, setShowPhonePePayment] = useState(false);
+  const [showNewBookingModal, setShowNewBookingModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [currentStep, setCurrentStep] = useState(1);
+  const [totalSteps] = useState(3); // now only 3 steps
+  const [newBooking, setNewBooking] = useState<any>({
+    location_address: '',
+    gps_link: '',
+    property_type: '',
+    indoor_outdoor: '',
+    area_size: '',
+    area_unit: 'sq_ft',
+    rooms_sections: '',
+    num_floors: '1',
+    preferred_date: '',
+    preferred_time: '',
+    special_requirements: '',
+
+    // Video Specifications
+    fpv_tour_type: '',
+    video_length: '',
+    resolution: '',
+    editing_style: '',
+    background_music_voiceover: false,
+
+    // Cost fields
+    base_package_cost: 0,
+    total_cost: 0,
+
+    // Status fields
+    status: 'pending',
+    payment_status: 'pending',
+  });
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  // Auto calculate cost
+  useEffect(() => {
+    if (newBooking.property_type && newBooking.area_size && newBooking.num_floors) {
+      const { base, final } = calculateCost(
+        newBooking.property_type,
+        parseFloat(newBooking.area_size),
+        parseInt(newBooking.num_floors)
+      );
+      if (base && final) {
+        setNewBooking((prev: any) => ({
+          ...prev,
+          base_package_cost: base,
+          total_cost: final
+        }));
+      }
+    }
+  }, [newBooking.property_type, newBooking.area_size, newBooking.num_floors]);
+
+  const fetchBookings = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/api/bookings', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBookings(response.data);
+      setLoading(false);
+    } catch (err) {
+      setError('Failed to fetch bookings');
+      setLoading(false);
+    }
+  };
 
   const handleNewBooking = async () => {
     try {
       const token = localStorage.getItem('token');
 
-      // Prepare booking data with all fields
+      // Prepare booking data
       const bookingData = {
         // Project/Shoot Details
         location_address: newBooking.location_address,
@@ -521,10 +330,10 @@ const ProjectsContent: React.FC = () => {
         area_size: parseFloat(newBooking.area_size) || 0,
         area_unit: newBooking.area_unit,
         rooms_sections: parseInt(newBooking.rooms_sections) || 0,
+        num_floors: parseInt(newBooking.num_floors) || 1,
         preferred_date: newBooking.preferred_date,
         preferred_time: newBooking.preferred_time,
         special_requirements: newBooking.special_requirements,
-        drone_permissions_required: newBooking.drone_permissions_required,
 
         // Video Specifications
         fpv_tour_type: newBooking.fpv_tour_type,
@@ -533,23 +342,11 @@ const ProjectsContent: React.FC = () => {
         background_music_voiceover: newBooking.background_music_voiceover,
         editing_style: newBooking.editing_style,
 
-        // Cost Calculation
-        base_package_cost: parseFloat(newBooking.base_package_cost) || 0,
-        area_covered: parseFloat(newBooking.area_size) || 0,
-        shooting_hours: parseInt(newBooking.shooting_hours) || 0,
-        editing_color_grading: newBooking.editing_color_grading,
-        voiceover_script: newBooking.voiceover_script,
-        background_music_licensed: newBooking.background_music_licensed,
-        branding_overlay: newBooking.branding_overlay,
-        multiple_revisions: newBooking.multiple_revisions,
-        drone_licensing_fee: newBooking.drone_licensing_fee,
-        travel_cost: parseFloat(newBooking.travel_cost) || 0,
-        tax_percentage: newBooking.tax_percentage,
-        discount_code: newBooking.discount_code,
-        discount_amount: newBooking.discount_amount,
+        // Cost Calculation (auto only)
+        base_package_cost: newBooking.base_package_cost,
         total_cost: newBooking.total_cost,
 
-        // Status fields (will be set by backend defaults)
+        // Status
         status: 'pending',
         payment_status: 'pending'
       };
@@ -566,8 +363,76 @@ const ProjectsContent: React.FC = () => {
     }
   };
 
+
+  // Step validation
+  const validateStep1 = () => (
+    newBooking.location_address &&
+    newBooking.property_type &&
+    newBooking.indoor_outdoor &&
+    newBooking.area_size &&
+    newBooking.rooms_sections &&
+    newBooking.num_floors &&
+    newBooking.preferred_date &&
+    newBooking.preferred_time
+  );
+  const validateStep2 = () => (
+    newBooking.fpv_tour_type &&
+    newBooking.video_length &&
+    newBooking.resolution &&
+    newBooking.editing_style
+  );
+  const validateStep3 = () => true;
+
+  const validateCurrentStep = () => {
+    switch (currentStep) {
+      case 1: return validateStep1();
+      case 2: return validateStep2();
+      case 3: return validateStep3();
+      default: return false;
+    }
+  };
+
+
+
+  const resetBookingForm = () => {
+    setCurrentStep(1);
+    setNewBooking({
+      // Project/Shoot Details
+      location_address: '',
+      gps_link: '',
+      property_type: '',
+      indoor_outdoor: '',
+      area_size: '',
+      area_unit: 'sq_ft',
+      rooms_sections: '',
+      num_floors: '1',
+      preferred_date: '',
+      preferred_time: '',
+      special_requirements: '',
+
+      // Video Specifications
+      fpv_tour_type: '',
+      video_length: '',
+      resolution: '',
+      background_music_voiceover: false,
+      editing_style: '',
+
+      // Cost Calculation (auto only)
+      base_package_cost: 0,
+      total_cost: 0,
+
+      // Status fields
+      status: 'pending',
+      payment_status: 'pending'
+    });
+  };
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-500">{error}</div>;
+
+  function handlePayment(id: any): void {
+    throw new Error('Function not implemented.');
+  }
 
   return (
     <div>
@@ -603,86 +468,86 @@ const ProjectsContent: React.FC = () => {
               </tr>
             ) : (
               bookings.map((booking) => (
-              <tr key={booking.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{booking.pilot_name || 'Unassigned'}</div>
-                  <div className="text-sm text-gray-500">{booking.pilot_email || '-'}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(booking.preferred_date).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {booking.delivery_video_link || booking.delivery_drive_link ? (
-                    <a
-                      href={booking.delivery_video_link || booking.delivery_drive_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-blue-600 hover:text-blue-900 font-medium"
-                    >
-                      <Play size={16} className="mr-1" />
-                      Watch Video
-                    </a>
-                  ) : (
-                    <div className="inline-flex items-center text-gray-400">
-                      <Video size={16} className="mr-1" />
-                      Not available
-                    </div>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.status === 'completed'
+                <tr key={booking.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{booking.pilot_name || 'Unassigned'}</div>
+                    <div className="text-sm text-gray-500">{booking.pilot_email || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(booking.preferred_date).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {booking.delivery_video_link || booking.delivery_drive_link ? (
+                      <a
+                        href={booking.delivery_video_link || booking.delivery_drive_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center text-blue-600 hover:text-blue-900 font-medium"
+                      >
+                        <Play size={16} className="mr-1" />
+                        Watch Video
+                      </a>
+                    ) : (
+                      <div className="inline-flex items-center text-gray-400">
+                        <Video size={16} className="mr-1" />
+                        Not available
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.status === 'completed'
                       ? 'bg-green-100 text-green-800'
                       : booking.status === 'in_progress'
                         ? 'bg-blue-100 text-blue-800'
                         : booking.status === 'assigned'
                           ? 'bg-purple-100 text-purple-800'
                           : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                    {booking.status.split('_').map((word: string) =>
-                      word.charAt(0).toUpperCase() + word.slice(1)
-                    ).join(' ')}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.payment_status === 'paid'
+                      }`}>
+                      {booking.status.split('_').map((word: string) =>
+                        word.charAt(0).toUpperCase() + word.slice(1)
+                      ).join(' ')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.payment_status === 'paid'
                       ? 'bg-green-100 text-green-800'
                       : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                    {booking.payment_status.charAt(0).toUpperCase() + booking.payment_status.slice(1)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  {booking.status === 'completed' && booking.payment_status === 'pending' ? (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handlePhonePePayment(booking)}
-                        className="text-purple-600 hover:text-purple-900 font-medium"
-                      >
-                        Pay with PhonePe
-                      </button>
+                      }`}>
+                      {booking.payment_status.charAt(0).toUpperCase() + booking.payment_status.slice(1)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    {booking.status === 'completed' && booking.payment_status === 'pending' ? (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handlePhonePePayment(booking)}
+                          className="text-purple-600 hover:text-purple-900 font-medium"
+                        >
+                          Pay with PhonePe
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedBooking(booking);
+                            setShowPaymentModal(true);
+                          }}
+                          className="text-primary-600 hover:text-primary-900"
+                        >
+                          Manual Pay
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         onClick={() => {
                           setSelectedBooking(booking);
-                          setShowPaymentModal(true);
+                          setShowBookingDetails(true);
                         }}
                         className="text-primary-600 hover:text-primary-900"
                       >
-                        Manual Pay
+                        View
                       </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setSelectedBooking(booking);
-                        setShowBookingDetails(true);
-                      }}
-                      className="text-primary-600 hover:text-primary-900"
-                    >
-                      View
-                    </button>
-                  )}
-                </td>
-              </tr>
+                    )}
+                  </td>
+                </tr>
               ))
             )}
           </tbody>
@@ -713,11 +578,11 @@ const ProjectsContent: React.FC = () => {
               {/* Step Progress Indicator */}
               <div className="mb-8">
                 <div className="flex items-center justify-between">
-                  {[1, 2, 3, 4].map((step) => (
+                  {[1, 2, 3].map((step) => (
                     <div key={step} className="flex items-center">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step <= currentStep
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-200 text-gray-500'
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-200 text-gray-500'
                         }`}>
                         {step}
                       </div>
@@ -725,10 +590,10 @@ const ProjectsContent: React.FC = () => {
                         }`}>
                         {step === 1 && 'Project Details'}
                         {step === 2 && 'Video Specs'}
-                        {step === 3 && 'Cost Calculation'}
-                        {step === 4 && 'Review & Submit'}
+
+                        {step === 3 && 'Review & Submit'}
                       </div>
-                      {step < 4 && (
+                      {step < 3 && (
                         <div className={`ml-4 w-16 h-0.5 ${step < currentStep ? 'bg-primary-600' : 'bg-gray-200'
                           }`} />
                       )}
@@ -778,18 +643,16 @@ const ProjectsContent: React.FC = () => {
                             required
                           >
                             <option value="">Select Property Type</option>
-                            <option value="Hotel">Hotel</option>
-                            <option value="Real Estate">Real Estate</option>
-                            <option value="Factory">Factory</option>
-                            <option value="Showroom">Showroom</option>
-                            <option value="Resort">Resort</option>
-                            <option value="Restaurant">Restaurant</option>
-                            <option value="Office">Office</option>
-                            <option value="Warehouse">Warehouse</option>
-                            <option value="Retail Store">Retail Store</option>
-                            <option value="Event Venue">Event Venue</option>
-                            <option value="Other">Other</option>
+                            <option value="Retail Store / Showroom">Retail Store / Showroom</option>
+                            <option value="Restaurants & Cafes">Restaurants & Cafes</option>
+                            <option value="Fitness & Sports Arenas">Fitness & Sports Arenas</option>
+                            <option value="Resorts & Farmstays / Hotels">Resorts & Farmstays / Hotels</option>
+                            <option value="Real Estate Property">Real Estate Property</option>
+                            <option value="Shopping Mall / Complex">Shopping Mall / Complex</option>
+                            <option value="Adventure / Water Parks">Adventure / Water Parks</option>
+                            <option value="Gaming & Entertainment Zones">Gaming & Entertainment Zones</option>
                           </select>
+
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Indoor / Outdoor / Both</label>
@@ -1027,144 +890,10 @@ const ProjectsContent: React.FC = () => {
                   </div>
                 )}
 
-                {/* Step 3: Cost Calculation */}
-                {currentStep === 3 && (
-                  <div className="space-y-6">
-                    <div className="bg-yellow-50 p-4 rounded-lg">
-                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        💰 Step 3: Cost Calculation
-                      </h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Base Package Cost (₹)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={newBooking.base_package_cost}
-                            onChange={e => setNewBooking({ ...newBooking, base_package_cost: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            placeholder="e.g. 25000"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Number of Shooting Hours / Days</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={newBooking.shooting_hours}
-                            onChange={e => setNewBooking({ ...newBooking, shooting_hours: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            placeholder="e.g. 4"
-                          />
-                        </div>
 
-                        {/* Add-on Services */}
-                        <div className="col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Add-on Services</label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={newBooking.editing_color_grading}
-                                onChange={e => setNewBooking({ ...newBooking, editing_color_grading: e.target.checked })}
-                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                              <span className="text-sm text-gray-700">Editing & Color Grading</span>
-                            </label>
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={newBooking.voiceover_script}
-                                onChange={e => setNewBooking({ ...newBooking, voiceover_script: e.target.checked })}
-                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                              <span className="text-sm text-gray-700">Voiceover / Script</span>
-                            </label>
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={newBooking.background_music_licensed}
-                                onChange={e => setNewBooking({ ...newBooking, background_music_licensed: e.target.checked })}
-                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                              <span className="text-sm text-gray-700">Background Music (licensed)</span>
-                            </label>
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={newBooking.branding_overlay}
-                                onChange={e => setNewBooking({ ...newBooking, branding_overlay: e.target.checked })}
-                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                              <span className="text-sm text-gray-700">Branding Overlay (logos/text)</span>
-                            </label>
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={newBooking.multiple_revisions}
-                                onChange={e => setNewBooking({ ...newBooking, multiple_revisions: e.target.checked })}
-                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                              <span className="text-sm text-gray-700">Multiple Revisions</span>
-                            </label>
-                            <label className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                checked={newBooking.drone_licensing_fee}
-                                onChange={e => setNewBooking({ ...newBooking, drone_licensing_fee: e.target.checked })}
-                                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                              />
-                              <span className="text-sm text-gray-700">Drone Licensing / Permission Fee</span>
-                            </label>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Travel & Logistics Cost (₹)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={newBooking.travel_cost}
-                            onChange={e => setNewBooking({ ...newBooking, travel_cost: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            placeholder="e.g. 5000"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Tax / GST %</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={newBooking.tax_percentage}
-                            onChange={e => setNewBooking({ ...newBooking, tax_percentage: parseFloat(e.target.value) || 0 })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            placeholder="18"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Discount Code (Optional)</label>
-                          <input
-                            type="text"
-                            value={newBooking.discount_code}
-                            onChange={e => setNewBooking({ ...newBooking, discount_code: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            placeholder="Enter discount code"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Total Cost (Auto-calculated)</label>
-                          <div className="text-2xl font-bold text-green-600">
-                            ₹ {newBooking.total_cost.toLocaleString('en-IN')}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Step 4: Review & Submit */}
-                {currentStep === 4 && (
+                {currentStep === 3 && (
                   <div className="space-y-6">
                     <div className="bg-purple-50 p-4 rounded-lg">
                       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -1203,8 +932,8 @@ const ProjectsContent: React.FC = () => {
                   onClick={prevStep}
                   disabled={currentStep === 1}
                   className={`px-6 py-2.5 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${currentStep === 1
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                     }`}
                 >
                   {currentStep === 1 ? 'Cancel' : 'Previous'}
@@ -1226,8 +955,8 @@ const ProjectsContent: React.FC = () => {
                       onClick={nextStep}
                       disabled={!validateCurrentStep()}
                       className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${!validateCurrentStep()
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-primary-600 hover:bg-primary-700'
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-primary-600 hover:bg-primary-700'
                         }`}
                     >
                       Next Step
@@ -1237,8 +966,8 @@ const ProjectsContent: React.FC = () => {
                       onClick={handleNewBooking}
                       disabled={!validateCurrentStep()}
                       className={`px-6 py-2.5 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${!validateCurrentStep()
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-green-600 hover:bg-green-700'
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-green-600 hover:bg-green-700'
                         }`}
                     >
                       Create Booking
@@ -1249,71 +978,72 @@ const ProjectsContent: React.FC = () => {
             </div>
           </div>
         </div>
-        
+
       )}
 
-{/* Payment Modal */ }
-{
-  showPaymentModal && selectedBooking && (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div className="mt-3">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Process Payment</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Amount</label>
-              <input
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                placeholder="Enter payment amount"
-                required
-              />
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setPaymentAmount('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handlePayment(selectedBooking.id)}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
-                disabled={!paymentAmount || isNaN(Number(paymentAmount))}
-              >
-                Pay
-              </button>
+      {/* Payment Modal */}
+      {
+        showPaymentModal && selectedBooking && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+              <div className="mt-3">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Process Payment</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Amount</label>
+                    <input
+                      type="number"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                      placeholder="Enter payment amount"
+                      required
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      onClick={() => {
+                        setShowPaymentModal(false);
+                        setPaymentAmount('');
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handlePayment(selectedBooking.id)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
+                      disabled={!paymentAmount || isNaN(Number(paymentAmount))}
+                    >
+                      Pay
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+        )
+      }
 
-{/* PhonePe Payment Modal */ }
-{
-  showPhonePePayment && selectedBooking && (
-    <PhonePePayment
-      bookingId={selectedBooking.id}
-      amount={selectedBooking.final_cost || selectedBooking.base_cost || 0}
-      onSuccess={() => {
-        setShowPhonePePayment(false);
-        setSelectedBooking(null);
-        fetchBookings();
-      }}
-      onCancel={() => {
-        setShowPhonePePayment(false);
-        setSelectedBooking(null);
-      }}
-    />
-  )
-}
+      {/* PhonePe Payment Modal */}
+      {
+        showPhonePePayment && selectedBooking && (
+          <PhonePePayment
+            bookingId={selectedBooking.id}
+            amount={selectedBooking.total_cost || selectedBooking.base_package_cost || 0}
+            onSuccess={() => {
+              setShowPhonePePayment(false);
+              setSelectedBooking(null);
+              fetchBookings();
+            }}
+            onCancel={() => {
+              setShowPhonePePayment(false);
+              setSelectedBooking(null);
+            }}
+          />
+
+        )
+      }
     </div >
   );
 };
@@ -1616,8 +1346,8 @@ const SettingsContent: React.FC = () => {
               onClick={handleDeleteAccount}
               disabled={deleteLoading}
               className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${deleteLoading
-                  ? 'bg-red-400 cursor-not-allowed'
-                  : 'bg-red-600 hover:bg-red-700'
+                ? 'bg-red-400 cursor-not-allowed'
+                : 'bg-red-600 hover:bg-red-700'
                 }`}
             >
               {deleteLoading ? 'Deleting...' : 'Delete Account'}
@@ -1632,30 +1362,6 @@ const SettingsContent: React.FC = () => {
 // Removed unused CATEGORY_OPTIONS and CITY_LIST constants
 // These were legacy constants not used in the step-by-step form
 
-function calculateCost(category: string, area_sqft: number, num_floors: number) {
-  const COSTING_TABLE: Record<string, (number | null)[]> = {
-    "Retail Store / Showroom": [5999, 9999, 15999, 20999, null],
-    "Restaurants & Cafes": [7999, 11999, 19999, 25999, null],
-    "Fitness & Sports Arenas": [9999, 13999, 22999, 31999, null],
-    "Resorts & Farmstays / Hotels": [11999, 17999, 29999, 39999, null],
-    "Real Estate Property": [13999, 23999, 37999, 49999, null],
-    "Shopping Mall / Complex": [15999, 29999, 47999, 63999, null],
-    "Adventure / Water Parks": [12999, 23999, 39999, 55999, null],
-    "Gaming & Entertainment Zones": [10999, 19999, 33999, 45999, null],
-  };
-  const area_ranges = [1000, 5000, 10000, 50000];
-  if (!COSTING_TABLE[category]) return { base: null, final: null, custom: 'Invalid category' };
-  if (area_sqft > 50000) return { base: null, final: null, custom: 'Custom Quote' };
-  let idx = 0;
-  for (let i = 0; i < area_ranges.length; i++) {
-    if (area_sqft <= area_ranges[i]) { idx = i; break; }
-    idx = i + 1;
-  }
-  const base = COSTING_TABLE[category][idx];
-  if (base == null) return { base: null, final: null, custom: 'Custom Quote' };
-  if (!num_floors || num_floors < 1) num_floors = 1;
-  const final = Math.round(base * (1 + 0.1 * (num_floors - 1)));
-  return { base, final, custom: null };
-}
+
 
 export default ClientDashboard; 

@@ -241,7 +241,7 @@ const LoginPage: React.FC = () => {
               </form>
               
               <div className="mt-6 text-center text-gray-600">
-                Don't have an account? <Link to="/signup" className="text-primary-600 hover:text-primary-700 font-medium">Sign up</Link>
+                Don't have an account? <Link to="/" className="text-primary-600 hover:text-primary-700 font-medium">Sign up</Link>
               </div>
             </div>
           </motion.div>

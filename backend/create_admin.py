@@ -31,8 +31,7 @@ def create_admin_user():
     
     # Admin user details
     admin_data = {
-        'business_name': 'HMX Admin',
-        'contact_name': 'Admin User',
+        'name': 'Admin User',
         'email': 'admin@hmx.com',
         'phone': '1234567890',
         'password': 'admin123',  # This will be hashed

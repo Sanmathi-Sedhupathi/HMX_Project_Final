@@ -282,7 +282,30 @@ def init_db():
                     print(f"Error adding {column_name} column: {e}")
                 else:
                     print(f"{column_name} column already exists")
+# --- Ensure default admin exists ---
+    admin_email = "admin@hmx.com"
+    c.execute("SELECT id FROM users WHERE email=?", (admin_email,))
+    if not c.fetchone():
+        from datetime import datetime
+        from werkzeug.security import generate_password_hash
 
+        password_hash = generate_password_hash("admin123")
+        c.execute('''
+        INSERT INTO users (username, email, password_hash, role, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        "Admin User",
+        admin_email,
+        password_hash,
+        "admin",
+        datetime.now(),
+        datetime.now()
+        ))
+        print("\n✅ Admin user created successfully!")
+        print(f"Email: {admin_email}")
+        print("Password: admin123")
+    else:
+        print("\nℹ️ Admin user already exists")
     # Check if pilots table exists
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pilots'")
     if not c.fetchone():
@@ -294,6 +317,7 @@ def init_db():
                 full_name TEXT,
                 email TEXT UNIQUE NOT NULL,
                 phone TEXT,
+                password TEXT,
                 password_hash TEXT NOT NULL,
                 date_of_birth DATE,
                 gender TEXT,
@@ -373,109 +397,109 @@ def init_db():
     if not c.fetchone():
         print("Creating bookings table...")
         c.execute('''
-            CREATE TABLE IF NOT EXISTS bookings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                pilot_id INTEGER,
-                editor_id INTEGER,
-                referral_id INTEGER,
-                admin_comments TEXT,
-                industry TEXT,
-                preferred_date DATE,
-                location TEXT,
-                duration INTEGER,
-                requirements TEXT,
-                status TEXT DEFAULT 'pending',
-                pilot_notes TEXT,
-                client_notes TEXT,
-                drive_link TEXT,
-                payment_status TEXT DEFAULT 'pending',
-                payment_amount DECIMAL(10,2),
-                payment_date TIMESTAMP,
-                completed_date TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                category TEXT,
-                area_sqft INTEGER,
-                num_floors INTEGER,
-                base_cost INTEGER,
-                final_cost INTEGER,
-                custom_quote TEXT,
-                description TEXT,
-                FOREIGN KEY (user_id) REFERENCES users (id),
-                FOREIGN KEY (pilot_id) REFERENCES pilots (id),
-                FOREIGN KEY (editor_id) REFERENCES editors (id),
-                FOREIGN KEY (referral_id) REFERENCES referrals (id)
-            )
-        ''')
+           CREATE TABLE IF NOT EXISTS bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    pilot_id INTEGER,
+    editor_id INTEGER,
+    referral_id INTEGER,
+
+    -- Booking details
+    location_address TEXT,
+    gps_link TEXT,
+    property_type TEXT,
+    indoor_outdoor TEXT,
+    area_size REAL,
+    area_unit TEXT,
+    rooms_sections INTEGER,
+    num_floors INTEGER,
+    preferred_date DATE,
+    preferred_time TEXT,
+    special_requirements TEXT,
+    drone_permissions_required BOOLEAN,
+
+    -- Video Specifications
+    fpv_tour_type TEXT,
+    video_length INTEGER,
+    resolution TEXT,
+    background_music_voiceover BOOLEAN,
+    editing_style TEXT,
+
+    -- Cost
+    base_package_cost REAL,
+    total_cost REAL,
+    custom_quote TEXT,
+
+    -- Status / meta
+    status TEXT DEFAULT 'pending',
+    payment_status TEXT DEFAULT 'pending',
+    payment_amount DECIMAL(10,2),
+    payment_date TIMESTAMP,
+    completed_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    admin_comments TEXT,
+    description TEXT,
+    delivery_video_link TEXT,
+    drive_link TEXT,
+
+    -- Earnings
+    pilot_earnings DECIMAL(10,2),
+    editor_earnings DECIMAL(10,2),
+    referral_earnings DECIMAL(10,2),
+    hmx_earnings DECIMAL(10,2),
+    gateway_fees DECIMAL(10,2),
+
+    -- Relationships
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (pilot_id) REFERENCES pilots (id),
+    FOREIGN KEY (editor_id) REFERENCES editors (id),
+    FOREIGN KEY (referral_id) REFERENCES referrals (id)
+    )
+    ''')
+    
+
     else:
         # Add new columns to existing bookings table
-        new_columns = [
-            ('drive_link', 'TEXT'),
-            ('payment_status', 'TEXT DEFAULT "pending"'),
-            ('payment_amount', 'DECIMAL(10,2)'),
-            ('payment_date', 'TIMESTAMP'),
-            ('completed_date', 'TIMESTAMP'),
-            ('referral_id', 'INTEGER'),
-            ('admin_comments', 'TEXT'),
-            ('category', 'TEXT'),
-            ('area_sqft', 'INTEGER'),
-            ('num_floors', 'INTEGER'),
-            ('base_cost', 'INTEGER'),
-            ('final_cost', 'INTEGER'),
-            ('custom_quote', 'TEXT'),
-            ('description', 'TEXT'),
-            # Comprehensive booking details
-            ('location_address', 'TEXT'),
-            ('gps_link', 'TEXT'),
-            ('property_type', 'TEXT'),
-            ('indoor_outdoor', 'TEXT'),
-            ('area_size', 'REAL'),
-            ('area_unit', 'TEXT'),
-            ('rooms_sections', 'INTEGER'),
-            ('preferred_date', 'DATE'),
-            ('preferred_time', 'TEXT'),
-            ('special_requirements', 'TEXT'),
-            ('drone_permissions_required', 'BOOLEAN'),
-            ('fpv_tour_type', 'TEXT'),
-            ('video_length', 'INTEGER'),
-            ('resolution', 'TEXT'),
-            ('background_music_voiceover', 'BOOLEAN'),
-            ('editing_style', 'TEXT'),
-            ('base_package_cost', 'REAL'),
-            ('area_covered', 'REAL'),
-            ('shooting_hours', 'INTEGER'),
-            ('editing_color_grading', 'BOOLEAN'),
-            ('voiceover_script', 'BOOLEAN'),
-            ('background_music_licensed', 'BOOLEAN'),
-            ('branding_overlay', 'BOOLEAN'),
-            ('multiple_revisions', 'BOOLEAN'),
-            ('drone_licensing_fee', 'BOOLEAN'),
-            ('travel_cost', 'REAL'),
-            ('tax_percentage', 'REAL'),
-            ('discount_code', 'TEXT'),
-            ('discount_amount', 'REAL'),
-            ('total_cost', 'REAL'),
-            ('editor_id', 'INTEGER'),
-            ('pilot_id', 'INTEGER'),
-            ('delivery_video_link', 'TEXT'),
-            # Earnings columns
-            ('pilot_earnings', 'DECIMAL(10,2)'),
-            ('editor_earnings', 'DECIMAL(10,2)'),
-            ('referral_earnings', 'DECIMAL(10,2)'),
-            ('hmx_earnings', 'DECIMAL(10,2)'),
-            ('gateway_fees', 'DECIMAL(10,2)')
-        ]
+        required_columns = {
+        "location_address": "TEXT",
+        "gps_link": "TEXT",
+        "property_type": "TEXT",
+        "indoor_outdoor": "TEXT",
+        "area_size": "REAL",
+        "area_unit": "TEXT",
+        "rooms_sections": "INTEGER",
+        "num_floors": "INTEGER",
+        "preferred_date": "DATE",
+        "preferred_time": "TEXT",
+        "special_requirements": "TEXT",
+        "drone_permissions_required": "BOOLEAN",
+        "fpv_tour_type": "TEXT",
+        "video_length": "INTEGER",
+        "resolution": "TEXT",
+        "background_music_voiceover": "BOOLEAN",
+        "editing_style": "TEXT",
+        "base_package_cost": "REAL",
+        "total_cost": "REAL",
+        "custom_quote": "TEXT",
+        "description": "TEXT",
+        "delivery_video_link": "TEXT",
+        "pilot_earnings": "DECIMAL(10,2)",
+        "editor_earnings": "DECIMAL(10,2)",
+        "referral_earnings": "DECIMAL(10,2)",
+        "hmx_earnings": "DECIMAL(10,2)",
+        "gateway_fees": "DECIMAL(10,2)"
+    }
 
-        for column_name, column_type in new_columns:
-            try:
-                c.execute(f'ALTER TABLE bookings ADD COLUMN {column_name} {column_type}')
-                print(f"Added {column_name} column to bookings table")
-            except sqlite3.OperationalError as e:
-                if "duplicate column name" not in str(e):
-                    print(f"Error adding {column_name} column: {e}")
-                else:
-                    print(f"{column_name} column already exists")
+    # Get existing columns
+        c.execute("PRAGMA table_info(bookings)")
+        existing_cols = [row[1] for row in c.fetchall()]
+
+    # Add only missing ones
+        for col, col_type in required_columns.items():
+            if col not in existing_cols:
+                print(f"Adding missing column: {col}")
+                c.execute(f"ALTER TABLE bookings ADD COLUMN {col} {col_type}")
 
     # Check if messages table exists
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'")
@@ -925,6 +949,7 @@ def init_db():
                 full_name TEXT,
                 email TEXT UNIQUE NOT NULL,
                 phone TEXT,
+                password TEXT,
                 password_hash TEXT NOT NULL,
                 date_of_birth DATE,
                 gender TEXT,
@@ -1226,7 +1251,7 @@ def register():
         # Check if email already exists in applications or main table
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute('SELECT id FROM business_client_applications WHERE email = ? OR official_email = ?',
+        cursor.execute('SELECT id FROM business_client_applications WHERE (email = ? OR official_email = ?) AND status = "pending"',
                       (data['email'], data['official_email']))
         if cursor.fetchone():
             print(f"Email {data['email']} or official email {data['official_email']} already has pending application")
@@ -1565,154 +1590,161 @@ def get_bookings(current_user):
             "Gaming & Entertainment Zones": [10999,19999, 33999, 45999, None],
         }
         area_ranges = [1000, 5000, 10000, 50000]
+
         if category not in COSTING_TABLE:
             return None, None, "Invalid category"
         if area_sqft > 50000:
             return None, None, "Custom Quote"
-        # Find index for area
+
+        # Find area slab
         idx = 0
         for i, max_area in enumerate(area_ranges):
             if area_sqft <= max_area:
                 idx = i
                 break
             idx = i + 1
+
         base_cost = COSTING_TABLE[category][idx]
         if base_cost is None:
             return None, None, "Custom Quote"
+
         # Floor adjustment
         if num_floors is None or num_floors < 1:
             num_floors = 1
         final_cost = int(base_cost * (1 + 0.1 * (num_floors - 1)))
+
         return base_cost, final_cost, None
 
     if request.method == 'POST':
         data = request.json
-        print("\n=== Creating New Comprehensive Booking ===")
-        print(f"Request headers: {dict(request.headers)}")
-        print(f"Current user: {current_user}")
-        print(f"Booking data: {data}")
+        print("\n=== Creating New Booking ===")
         try:
-            # Validate required fields for comprehensive booking
+            # Required fields
             required_fields = [
                 'location_address', 'property_type', 'indoor_outdoor', 'area_size',
                 'rooms_sections', 'preferred_date', 'preferred_time', 'fpv_tour_type',
                 'video_length', 'resolution', 'editing_style'
             ]
-
             for field in required_fields:
                 if field not in data or not data[field]:
-                    print(f"Missing or empty required field: {field}")
                     return jsonify({'message': f'Missing required field: {field}'}), 400
 
-            # Validate data types
-            try:
-                area_size = float(data['area_size'])
-                if area_size <= 0:
-                    return jsonify({'message': 'Area size must be positive'}), 400
-            except (ValueError, TypeError):
-                return jsonify({'message': 'Area size must be a valid number'}), 400
+            # Parse numbers
+            area_size = float(data['area_size'])
+            rooms_sections = int(data['rooms_sections'])
+            video_length = int(data['video_length'])
+            num_floors = int(data.get('num_floors', 1))
 
-            try:
-                rooms_sections = int(data['rooms_sections'])
-                if rooms_sections <= 0:
-                    return jsonify({'message': 'Rooms/sections must be positive'}), 400
-            except (ValueError, TypeError):
-                return jsonify({'message': 'Rooms/sections must be a valid number'}), 400
+            # --- Cost Calculation ---
+            base_cost, final_cost, error = calculate_cost(
+                data['property_type'], area_size, num_floors
+            )
+            if error:
+                return jsonify({'message': error}), 400
 
-            try:
-                video_length = int(data['video_length'])
-                if video_length <= 0:
-                    return jsonify({'message': 'Video length must be positive'}), 400
-            except (ValueError, TypeError):
-                return jsonify({'message': 'Video length must be a valid number'}), 400
+            total_cost = final_cost  # can extend later with tax/discounts
 
-            # Verify user exists
+            # --- Earnings Split ---
+            def calculate_earnings(total_cost, has_referral):
+                pilot_pct = 0.50
+                editor_pct = 0.15
+                gateway_pct = 0.025
+                if has_referral:
+                    referral_pct = 0.125
+                    hmx_pct = 0.20
+                else:
+                    referral_pct = 0.0
+                    hmx_pct = 0.325
+                return {
+                    "pilot_earnings": round(total_cost * pilot_pct, 2),
+                    "editor_earnings": round(total_cost * editor_pct, 2),
+                    "referral_earnings": round(total_cost * referral_pct, 2),
+                    "hmx_earnings": round(total_cost * hmx_pct, 2),
+                    "gateway_fees": round(total_cost * gateway_pct, 2),
+                }
+
+            has_referral = bool(data.get('referral_id'))
+            earn = calculate_earnings(total_cost, has_referral)
+
+            # --- Insert into DB ---
             conn = get_db()
             cursor = conn.cursor()
-            cursor.execute('SELECT id FROM users WHERE id = ?', (current_user['id'],))
-            if not cursor.fetchone():
-                print(f"User not found: {current_user['id']}")
-                return jsonify({'message': 'User not found'}), 404
-
-            print("Inserting comprehensive booking into database...")
             cursor.execute('''
-                INSERT INTO bookings (
-                    user_id, location_address, gps_link, property_type, indoor_outdoor,
-                    area_size, area_unit, rooms_sections, preferred_date, preferred_time,
-                    special_requirements, drone_permissions_required, fpv_tour_type, video_length,
-                    resolution, background_music_voiceover, editing_style, base_package_cost,
-                    shooting_hours, editing_color_grading, voiceover_script, background_music_licensed,
-                    branding_overlay, multiple_revisions, drone_licensing_fee, travel_cost,
-                    tax_percentage, discount_code, discount_amount, total_cost, status, payment_status
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending'
-                )
-            ''', (
-                current_user['id'],
-                data['location_address'],
-                data.get('gps_link', ''),
-                data['property_type'],
-                data['indoor_outdoor'],
-                area_size,
-                data.get('area_unit', 'sq_ft'),
-                rooms_sections,
-                data['preferred_date'],
-                data['preferred_time'],
-                data.get('special_requirements', ''),
-                data.get('drone_permissions_required', False),
-                data['fpv_tour_type'],
-                video_length,
-                data['resolution'],
-                data.get('background_music_voiceover', False),
-                data['editing_style'],
-                data.get('base_package_cost', 0),
-                data.get('shooting_hours', 1),
-                data.get('editing_color_grading', False),
-                data.get('voiceover_script', False),
-                data.get('background_music_licensed', False),
-                data.get('branding_overlay', False),
-                data.get('multiple_revisions', False),
-                data.get('drone_licensing_fee', False),
-                data.get('travel_cost', 0),
-                data.get('tax_percentage', 18),
-                data.get('discount_code', ''),
-                data.get('discount_amount', 0),
-                data.get('total_cost', 0)
-            ))
+        INSERT INTO bookings (
+            user_id, location_address, gps_link, property_type, indoor_outdoor,
+            area_size, area_unit, rooms_sections, num_floors,
+            preferred_date, preferred_time, special_requirements, drone_permissions_required,
+            fpv_tour_type, video_length, resolution, background_music_voiceover, editing_style,
+            base_package_cost, total_cost, custom_quote,
+            status, payment_status,
+            admin_comments, description,
+            referral_id,
+            pilot_earnings, editor_earnings, referral_earnings, hmx_earnings, gateway_fees
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?,
+            'pending', 'pending',
+            ?, ?,
+            ?,
+            ?, ?, ?, ?, ?
+        )
+    ''', (
+        current_user['id'],
+        data['location_address'],
+        data.get('gps_link', ''),
+        data['property_type'],
+        data['indoor_outdoor'],
+        area_size,
+        data.get('area_unit', 'sq_ft'),
+        rooms_sections,
+        num_floors,
+        data['preferred_date'],
+        data['preferred_time'],
+        data.get('special_requirements', ''),
+        data.get('drone_permissions_required', False),
+        data['fpv_tour_type'],
+        video_length,
+        data['resolution'],
+        data.get('background_music_voiceover', False),
+        data['editing_style'],
+        base_cost, total_cost, data.get('custom_quote'),
+        data.get('admin_comments', ''),
+        data.get('description', ''),
+        data.get('referral_id'),
+        earn['pilot_earnings'], earn['editor_earnings'],
+        earn['referral_earnings'], earn['hmx_earnings'], earn['gateway_fees']
+    ))
+
 
             conn.commit()
             booking_id = cursor.lastrowid
-            print(f"Created comprehensive booking with ID: {booking_id}")
             conn.close()
 
             return jsonify({
-                'message': 'Comprehensive booking created successfully',
+                'message': 'Booking created successfully',
                 'booking_id': booking_id,
-                'total_cost': data.get('total_cost', 0)
+                'base_cost': base_cost,
+                'final_cost': final_cost,
+                'total_cost': total_cost,
+                'earnings': earn
             }), 201
 
         except sqlite3.Error as e:
-            print(f"Database error: {str(e)}")
-            print(f"Error type: {type(e)}")
             import traceback
-            print(f"Traceback: {traceback.format_exc()}")
+            print(traceback.format_exc())
             return jsonify({'message': f'Database error: {str(e)}'}), 500
         except Exception as e:
-            print(f"Unexpected error: {str(e)}")
-            print(f"Error type: {type(e)}")
             import traceback
-            print(f"Traceback: {traceback.format_exc()}")
+            print(traceback.format_exc())
             return jsonify({'message': f'Failed to create booking: {str(e)}'}), 500
-    
+
+    # --- GET BOOKINGS ---
     print("\n=== Fetching Bookings ===")
-    print(f"User role: {current_user['role']}")
-    
     try:
         conn = get_db()
         cursor = conn.cursor()
-        
+
         if current_user['role'] == 'admin':
-            # Admin sees all bookings with user and pilot details
             cursor.execute('''
                 SELECT b.*, 
                        u.business_name, u.contact_name, u.email as client_email,
@@ -1723,7 +1755,6 @@ def get_bookings(current_user):
                 ORDER BY b.created_at DESC
             ''')
         elif current_user['role'] == 'pilot':
-            # Show all available bookings and bookings assigned to this pilot, regardless of city
             cursor.execute('''
                 SELECT b.*, 
                        u.business_name, u.contact_name, u.email as client_email,
@@ -1738,7 +1769,6 @@ def get_bookings(current_user):
                 ORDER BY b.created_at DESC
             ''', (current_user.get('id', current_user.get('user_id')), current_user.get('id', current_user.get('user_id'))))
         else:
-            # Clients see their own bookings
             cursor.execute('''
                 SELECT b.*, 
                        p.name as pilot_name, p.email as pilot_email
@@ -1747,15 +1777,15 @@ def get_bookings(current_user):
                 WHERE b.user_id = ?
                 ORDER BY b.created_at DESC
             ''', (current_user['id'],))
-        
+
         bookings = cursor.fetchall()
-        print(f"Found {len(bookings)} bookings")
         conn.close()
-        
         return jsonify([dict(booking) for booking in bookings])
+
     except Exception as e:
         print(f"Error fetching bookings: {str(e)}")
         return jsonify({'message': 'Failed to fetch bookings'}), 500
+
 
 @app.route('/api/bookings/<int:booking_id>/claim', methods=['POST', 'OPTIONS'])
 @token_required
@@ -2575,7 +2605,7 @@ def public_referral_register():
         c = conn.cursor()
 
         # Check if email already exists in applications or main table
-        c.execute('SELECT id FROM referral_applications WHERE email = ?', (data['email'],))
+        c.execute('SELECT id FROM referral_applications WHERE email = ? AND status="pending"', (data['email'],))
         if c.fetchone():
             conn.close()
             return jsonify({'message': 'Application already submitted with this email'}), 400
@@ -3394,8 +3424,8 @@ def get_admin_orders(current_user):
         # Use a simple query with only the columns we know exist from your data
         base_query = '''
             SELECT b.*,
-                   COALESCE(u.name, 'Unknown Client') as client_name,
-                   u.name, u.email as client_email, u.id as client_id,
+                   COALESCE(u.username, 'Unknown Client') as client_name,
+                   u.username, u.email as client_email, u.id as client_id,
                    p.name as pilot_name, p.email as pilot_email, p.id as pilot_id_actual,
                    e.name as editor_name, e.email as editor_email, e.id as editor_id_actual,
                    r.name as referral_name, r.id as referral_id_actual
@@ -3497,10 +3527,7 @@ def get_admin_orders(current_user):
                 # Financial Information
                 'base_package_cost': order_dict.get('base_package_cost', 0),
                 'base_cost': order_dict.get('base_cost', 0),
-                'final_cost': order_dict.get('final_cost', 0),
                 'total_cost': order_dict.get('total_cost', 0),
-                'travel_cost': order_dict.get('travel_cost', 0),
-                'tax_percentage': order_dict.get('tax_percentage', 0),
                 'discount_code': order_dict.get('discount_code', ''),
                 'discount_amount': order_dict.get('discount_amount', 0),
                 'payment_status': order_dict.get('payment_status', 'pending'),
@@ -3520,7 +3547,14 @@ def get_admin_orders(current_user):
 
                 # Links & Deliverables
                 'drive_link': order_dict.get('drive_link', ''),
-                'delivery_video_link': order_dict.get('delivery_video_link', '')
+                'delivery_video_link': order_dict.get('delivery_video_link', ''),
+                
+                #Earnings
+                'pilot_earnings': order_dict.get('pilot_earnings', ''),
+                'editor_earnings': order_dict.get('editor_earnings', ''),
+                'referral_earnings': order_dict.get('referral_earnings', ''),
+                'hmx_earnings': order_dict.get('hmx_earnings', ''),
+                'gateway_fees': order_dict.get('gateway_fees', ''),
             }
 
             processed_orders.append(formatted_order)
@@ -3870,7 +3904,7 @@ def pilot_register():
         cursor = conn.cursor()
 
         # Check if email already exists in applications or main table
-        cursor.execute('SELECT id FROM pilot_applications WHERE email = ?', (data['email'],))
+        cursor.execute('SELECT id FROM pilot_applications WHERE email = ? AND status="pending"', (data['email'],))
         if cursor.fetchone():
             print(f"Email already has pending application: {data['email']}")
             conn.close()
@@ -3888,19 +3922,19 @@ def pilot_register():
         # Insert new pilot application
         cursor.execute('''
             INSERT INTO pilot_applications (
-                name, full_name, email, phone, password, password_hash, date_of_birth, gender, address,
+                name, full_name, password,email, phone,  password_hash, date_of_birth, gender, address,
                 government_id_proof, license_number, issuing_authority, license_issue_date,
                 license_expiry_date, drone_model, drone_serial, drone_uin, drone_category,
                 total_flying_hours, flight_records, insurance_policy, insurance_validity,
                 pilot_license_url, id_proof_url, training_certificate_url, photograph_url,
                 insurance_certificate_url, cities, experience, equipment, portfolio_url, bank_account
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data['name'],
             data['full_name'],
             data['email'],
             data['phone'],
-            password_hash,  # For legacy password column
+            password_hash,
             password_hash,  # For new password_hash column
             data['date_of_birth'],
             data['gender'],
@@ -4023,7 +4057,7 @@ def editor_register():
         cursor = conn.cursor()
 
         # Check if email already exists in applications or main table
-        cursor.execute('SELECT id FROM editor_applications WHERE email = ?', (data['email'],))
+        cursor.execute('SELECT id FROM editor_applications WHERE email = ? AND status="pending"', (data['email'],))
         if cursor.fetchone():
             print(f"Email already exists in applications: {data['email']}")
             conn.close()
@@ -4225,10 +4259,10 @@ def get_clients(current_user):
         c.execute('''
             SELECT
                 u.id,
-                u.name as contact_name,
+                u.username as contact_name,
                 bc.business_name,
                 bc.contact_person_designation as position,
-                u.phone,
+                bc.phone,
                 u.email,
                 bc.official_address as city,
                 u.created_at,
@@ -4287,7 +4321,7 @@ def get_client_details(current_user, client_id):
         c.execute('''
             SELECT
                 u.id,
-                u.name as user_contact_name,
+                u.username as user_contact_name,
                 u.email as user_email,
                 u.phone as user_phone,
                 u.created_at as user_created_at,
@@ -4858,8 +4892,8 @@ def approve_application(current_user, application_type, application_id):
 
             # Also create a user record for authentication and client database display
             cursor.execute('''
-                INSERT INTO users (email, password_hash, name, role, approval_status, created_at)
-                VALUES (?, ?, ?, 'client', 'approved', CURRENT_TIMESTAMP)
+                INSERT INTO users (email, password_hash, username, role, created_at,updated_at)
+                VALUES (?, ?, ?, 'client',  CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
             ''', (
                 app_dict['email'], app_dict['password_hash'], app_dict['contact_name']
             ))
@@ -4992,7 +5026,7 @@ def get_video_reviews(current_user):
         base_query = '''
             SELECT vr.*,
                    b.id as booking_id,
-                   u.name as client_name, u.email as client_email,
+                   u.username as client_name, u.email as client_email,
                    p.name as pilot_name, p.email as pilot_email,
                    e.name as editor_name, e.email as editor_email
             FROM video_reviews vr
@@ -5203,7 +5237,7 @@ def pilot_video_submissions(current_user):
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT vr.*, b.id as booking_id,
-                       u.name as client_name
+                       u.username as client_name
                 FROM video_reviews vr
                 LEFT JOIN bookings b ON vr.order_id = b.id
                 LEFT JOIN users u ON vr.client_id = u.id
@@ -5284,7 +5318,7 @@ def editor_video_submissions(current_user):
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT vr.*, b.id as booking_id,
-                       u.name as client_name
+                       u.username as client_name
                 FROM video_reviews vr
                 LEFT JOIN bookings b ON vr.order_id = b.id
                 LEFT JOIN users u ON vr.client_id = u.id
@@ -5370,7 +5404,7 @@ def get_pilot_assigned_orders(current_user):
 
         # Get ALL orders assigned to this pilot (for dashboard)
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email,
+            SELECT b.*, u.username as client_name, u.email as client_email,
                    e.name as editor_name
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
@@ -5397,6 +5431,7 @@ def get_pilot_assigned_orders(current_user):
                 'status': order_dict.get('status'),
                 'preferred_date': order_dict.get('preferred_date', ''),
                 'location_address': order_dict.get('location_address', ''),
+                'gps_link': order_dict.get('gps_link',''),
                 'property_type': order_dict.get('property_type', ''),
                 'payment_amount': order_dict.get('payment_amount'),
                 'payment_status': order_dict.get('payment_status'),
@@ -5430,7 +5465,7 @@ def get_editor_ongoing_orders(current_user):
 
         # Get ongoing bookings assigned to this editor
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email
+            SELECT b.*, u.username as client_name, u.email as client_email
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
             WHERE b.editor_id = ? AND b.status NOT IN ('completed', 'cancelled', 'rejected')
@@ -5501,7 +5536,7 @@ def get_editor_completed_orders(current_user):
 
         # Get only completed bookings assigned to this editor
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email
+            SELECT b.*, u.username as client_name, u.email as client_email
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
             WHERE b.editor_id = ? AND b.status = 'completed'
@@ -5565,7 +5600,7 @@ def get_editor_cancelled_orders(current_user):
 
         # Get cancelled/rejected bookings assigned to this editor
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email
+            SELECT b.*, u.username as client_name, u.email as client_email
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
             WHERE b.editor_id = ? AND b.status IN ('cancelled', 'rejected')
@@ -5702,10 +5737,7 @@ def submit_editor_video(current_user):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/pilot/test-simple', methods=['GET'])
-def test_simple_pilot():
-    """Simple test endpoint without authentication"""
-    return jsonify({'message': 'Pilot endpoint is working', 'timestamp': datetime.now().isoformat()})
+
 
 @app.route('/api/pilot/submission-history/<int:order_id>', methods=['GET'])
 @token_required
@@ -5761,7 +5793,7 @@ def get_pilot_all_orders(current_user):
 
         # Get ALL bookings assigned to this pilot
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
+            SELECT b.*, u.username as client_name, u.email as client_email, u.business_name
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
             WHERE b.pilot_id = ?
@@ -5799,56 +5831,8 @@ def get_pilot_all_orders(current_user):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/pilot/ongoing-orders', methods=['GET'])
-@token_required
-def get_pilot_ongoing_orders(current_user):
-    """Get ongoing orders for the logged-in pilot (not completed, cancelled, or rejected)"""
-    print(f"Pilot ongoing orders - current_user: {current_user}")
 
-    if current_user['role'] != 'pilot':
-        return jsonify({'message': 'Unauthorized'}), 403
 
-    try:
-        conn = get_db()
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        # Get ongoing bookings assigned to this pilot
-        cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
-            FROM bookings b
-            LEFT JOIN users u ON b.user_id = u.id
-            WHERE b.pilot_id = ? AND b.status NOT IN ('completed', 'cancelled', 'rejected')
-            ORDER BY b.preferred_date ASC
-        ''', (current_user['user_id'],))
-
-        orders = cursor.fetchall()
-        conn.close()
-
-        orders_list = []
-        for order in orders:
-            order_dict = dict(order)
-            orders_list.append({
-                'id': order_dict.get('id'),
-                'user_id': order_dict.get('user_id'),
-                'client_id': order_dict.get('user_id'),
-                'editor_id': order_dict.get('editor_id'),
-                'client_name': order_dict.get('client_name') or order_dict.get('business_name', 'Unknown'),
-                'client_email': order_dict.get('client_email', ''),
-                'location_address': order_dict.get('location_address'),
-                'status': order_dict.get('status'),
-                'preferred_date': order_dict.get('preferred_date'),
-                'payment_amount': order_dict.get('payment_amount'),
-                'created_at': order_dict.get('created_at')
-            })
-
-        return jsonify(orders_list)
-
-    except Exception as e:
-        print(f"Error in get_pilot_ongoing_orders: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/pilot/completed-orders', methods=['GET'])
 @token_required
@@ -5865,7 +5849,7 @@ def get_pilot_completed_orders(current_user):
 
         # Get only completed bookings assigned to this pilot
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
+            SELECT b.*, u.username as client_name, u.email as client_email, u.business_name
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
             WHERE b.pilot_id = ? AND b.status = 'completed'
@@ -5915,7 +5899,7 @@ def get_pilot_cancelled_orders(current_user):
 
         # Get cancelled/rejected bookings assigned to this pilot
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email, u.business_name
+            SELECT b.*, u.username as client_name, u.email as client_email, u.business_name
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
             WHERE b.pilot_id = ? AND b.status IN ('cancelled', 'rejected')
@@ -5960,7 +5944,7 @@ def get_pilot_final_review(current_user):
 
         # Get orders where editor has submitted final video and waiting for pilot approval
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email,
+            SELECT b.*, u.username as client_name, u.email as client_email,
                    vr.drive_link as final_video_link
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id
@@ -6112,7 +6096,7 @@ def get_editor_assigned_orders(current_user):
 
         # Get ALL orders assigned to this editor (for dashboard)
         cursor.execute('''
-            SELECT b.*, u.name as client_name, u.email as client_email,
+            SELECT b.*, u.username as client_name, u.email as client_email,
                    p.name as pilot_name
             FROM bookings b
             LEFT JOIN users u ON b.user_id = u.id

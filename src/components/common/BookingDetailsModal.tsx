@@ -8,309 +8,129 @@ interface BookingDetailsModalProps {
   userRole: 'pilot' | 'editor';
 }
 
-const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  booking, 
-  userRole 
-}) => {
+const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ isOpen, onClose, booking, userRole }) => {
   if (!isOpen || !booking) return null;
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'Not specified';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  const formatCurrency = (amount: number) => {
-    if (!amount) return 'Not specified';
-    return `₹${amount.toLocaleString()}`;
-  };
+  const renderField = (label: string, value: any) => (
+    <div className="mb-1">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <p className="text-sm text-gray-900">{value !== null && value !== undefined && value !== '' ? value : 'Not specified'}</p>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center p-6 border-b">
-          <h2 className="text-xl font-semibold flex items-center">
-            <FileText className="mr-2" size={20} />
-            Booking Details - Order #{booking.id}
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+          <h2 className="text-2xl font-bold flex items-center">
+            <FileText className="mr-2" size={24} /> Booking Details - {booking.booking_id || booking.id}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X size={24} />
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={28} />
           </button>
         </div>
 
-        <div className="p-6">
+        {/* Body */}
+        <div className="p-6 space-y-6">
+          {/* Grid layout for main sections */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Basic Info */}
+            <div className="bg-indigo-50 rounded-lg p-4 shadow-md">
+              <h3 className="text-lg font-semibold mb-3 flex items-center"><User className="mr-2" />Basic Info</h3>
+              {renderField('Order ID', booking.id)}
+              {renderField('Booking ID', booking.booking_id)}
+              {renderField('Status', booking.status)}
+              {renderField('Created At', formatDate(booking.created_at))}
+              {renderField('Updated At', formatDate(booking.updated_at))}
+            </div>
+
+            {/* Client Info */}
+            <div className="bg-green-50 rounded-lg p-4 shadow-md">
+              <h3 className="text-lg font-semibold mb-3 flex items-center"><User className="mr-2" />Client Info</h3>
+              {renderField('Client Name', booking.client_name)}
+              {renderField('Client Email', booking.client_email)}
+              {renderField('Client ID', booking.client_id)}
+            </div>
+
+            {/* Team Assignments */}
+            <div className="bg-yellow-50 rounded-lg p-4 shadow-md">
+              <h3 className="text-lg font-semibold mb-3 flex items-center"><User className="mr-2" />Team</h3>
+              {renderField('Pilot', booking.pilot_name)}
+              {renderField('Editor', booking.editor_name)}
+              {renderField('Referral', booking.referral_name)}
+            </div>
+          </div>
+
+          {/* Location & Property */}
+          <div className="bg-purple-50 rounded-lg p-6 shadow-md">
+            <h3 className="text-xl font-semibold mb-4 flex items-center"><MapPin className="mr-2" />Location & Property</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {renderField('Location', booking.location)}
+              {renderField('Full Address', booking.location_address)}
+              {booking.gps_link ? (
+                <div>
+                  <label className="text-sm font-medium text-gray-700">GPS Link</label>
+                  <a href={booking.gps_link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm">
+                    <ExternalLink size={14} className="mr-1" /> Open Location
+                  </a>
+                </div>
+              ) : renderField('GPS Link', null)}
+              {renderField('Property Type', booking.property_type)}
+              {renderField('Industry', booking.industry)}
+              {renderField('Indoor/Outdoor', booking.indoor_outdoor)}
+              {renderField('Area Size', booking.area_size ? `${booking.area_size} ${booking.area_unit || 'sq ft'}` : null)}
+              {renderField('Rooms/Sections', booking.rooms_sections)}
+              {renderField('Duration', booking.duration)}
+            </div>
+          </div>
+
+          {/* Scheduling & Video Specs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                <User className="mr-2" size={18} />
-                Basic Information
-              </h3>
-              
-              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Status</label>
-                  <div className="mt-1">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      booking.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      booking.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      booking.status === 'editing' ? 'bg-purple-100 text-purple-800' :
-                      booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {booking.status?.replace('_', ' ').toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Industry</label>
-                  <p className="mt-1 text-sm text-gray-900">{booking.industry || booking.category || 'Not specified'}</p>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Property Type</label>
-                  <p className="mt-1 text-sm text-gray-900">{booking.property_type || 'Not specified'}</p>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Payment Amount</label>
-                  <p className="mt-1 text-sm text-gray-900">{formatCurrency(booking.payment_amount)}</p>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Payment Status</label>
-                  <div className="mt-1">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      booking.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
-                      booking.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {booking.payment_status?.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-blue-50 rounded-lg p-4 shadow-md">
+              <h3 className="text-lg font-semibold mb-3 flex items-center"><Calendar className="mr-2" />Scheduling</h3>
+              {renderField('Preferred Date', formatDate(booking.preferred_date))}
+              {renderField('Preferred Time', booking.preferred_time)}
+              {renderField('Shooting Hours', booking.shooting_hours)}
+              {renderField('Area Covered', booking.area_covered)}
             </div>
 
-            {/* Location & Schedule */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                <MapPin className="mr-2" size={18} />
-                Location & Schedule
-              </h3>
-              
-              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Location</label>
-                  <p className="mt-1 text-sm text-gray-900">{booking.location || 'Not specified'}</p>
-                </div>
-
-                {booking.location_address && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Full Address</label>
-                    <p className="mt-1 text-sm text-gray-900">{booking.location_address}</p>
-                  </div>
-                )}
-
-                {booking.gps_link && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">GPS Location</label>
-                    <div className="mt-1">
-                      <a
-                        href={booking.gps_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        <ExternalLink size={14} className="mr-1" />
-                        Open Location
-                      </a>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Preferred Date</label>
-                    <p className="mt-1 text-sm text-gray-900 flex items-center">
-                      <Calendar size={14} className="mr-1" />
-                      {formatDate(booking.preferred_date)}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Preferred Time</label>
-                    <p className="mt-1 text-sm text-gray-900 flex items-center">
-                      <Clock size={14} className="mr-1" />
-                      {booking.preferred_time || 'Not specified'}
-                    </p>
-                  </div>
-                </div>
-
-                {booking.duration && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Duration</label>
-                    <p className="mt-1 text-sm text-gray-900">{booking.duration} hours</p>
-                  </div>
-                )}
-              </div>
+            <div className="bg-pink-50 rounded-lg p-4 shadow-md">
+              <h3 className="text-lg font-semibold mb-3 flex items-center"><Video className="mr-2" />Video Specs</h3>
+              {renderField('FPV Tour Type', booking.fpv_tour_type)}
+              {renderField('Video Length', booking.video_length)}
+              {renderField('Resolution', booking.resolution)}
+              {renderField('Editing Style', booking.editing_style)}
+              {renderField('Background Music/Voiceover', booking.background_music_voiceover ? 'Yes' : 'No')}
+              {renderField('Color Grading', booking.editing_color_grading ? 'Yes' : 'No')}
+              {renderField('Voiceover Script', booking.voiceover_script ? 'Yes' : 'No')}
+              {renderField('Branding Overlay', booking.branding_overlay ? 'Yes' : 'No')}
+              {renderField('Multiple Revisions', booking.multiple_revisions ? 'Yes' : 'No')}
             </div>
           </div>
 
-          {/* Requirements & Notes */}
-          <div className="mt-6 space-y-4">
-            <h3 className="text-lg font-medium text-gray-900 flex items-center">
-              <FileText className="mr-2" size={18} />
-              Requirements & Notes
-            </h3>
-            
+          {/* Notes & Requirements */}
+          <div className="bg-green-50 rounded-lg p-4 shadow-md">
+            <h3 className="text-lg font-semibold mb-3">Notes & Requirements</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {booking.requirements && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <label className="text-sm font-medium text-blue-800">Project Requirements</label>
-                  <p className="mt-2 text-sm text-blue-900">{booking.requirements}</p>
-                </div>
-              )}
-
-              {booking.special_requirements && (
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <label className="text-sm font-medium text-purple-800">Special Requirements</label>
-                  <p className="mt-2 text-sm text-purple-900">{booking.special_requirements}</p>
-                </div>
-              )}
-
-              {booking.client_notes && (
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <label className="text-sm font-medium text-green-800">Client Notes</label>
-                  <p className="mt-2 text-sm text-green-900">{booking.client_notes}</p>
-                </div>
-              )}
-
-              {booking.pilot_notes && (
-                <div className="bg-yellow-50 p-4 rounded-lg">
-                  <label className="text-sm font-medium text-yellow-800">Pilot Notes</label>
-                  <p className="mt-2 text-sm text-yellow-900">{booking.pilot_notes}</p>
-                </div>
-              )}
-
-              {booking.admin_comments && (
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <label className="text-sm font-medium text-red-800">Admin Comments</label>
-                  <p className="mt-2 text-sm text-red-900">{booking.admin_comments}</p>
-                </div>
-              )}
+              {renderField('Requirements', booking.requirements)}
+              {renderField('Special Requirements', booking.special_requirements)}
+              {renderField('Custom Quote', booking.custom_quote)}
+              {renderField('Pilot Notes', booking.pilot_notes)}
+              {renderField('Client Notes', booking.client_notes)}
+              {renderField('Admin Comments', booking.admin_comments)}
             </div>
           </div>
-
-          {/* Video Links */}
-          <div className="mt-6 space-y-4">
-            <h3 className="text-lg font-medium text-gray-900 flex items-center">
-              <Video className="mr-2" size={18} />
-              Video Links
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {booking.drive_link && (
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <label className="text-sm font-medium text-gray-700">Raw Video Footage</label>
-                  <div className="mt-2">
-                    <a
-                      href={booking.drive_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
-                    >
-                      <Link size={14} className="mr-2" />
-                      View Raw Footage
-                    </a>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {userRole === 'pilot' ? 'Video uploaded by you' : 'Video uploaded by pilot'}
-                  </p>
-                </div>
-              )}
-
-              {booking.delivery_video_link && (
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <label className="text-sm font-medium text-gray-700">Final Edited Video</label>
-                  <div className="mt-2">
-                    <a
-                      href={booking.delivery_video_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
-                    >
-                      <Link size={14} className="mr-2" />
-                      View Final Video
-                    </a>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Final edited and approved video
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {!booking.drive_link && !booking.delivery_video_link && (
-              <div className="bg-gray-50 p-4 rounded-lg text-center">
-                <p className="text-gray-500">No video links available yet</p>
-              </div>
-            )}
-          </div>
-
-          {/* Technical Details (if available) */}
-          {(booking.area_size || booking.rooms_sections || booking.fpv_tour_type) && (
-            <div className="mt-6 space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Technical Details</h3>
-              
-              <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 md:grid-cols-4 gap-4">
-                {booking.area_size && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Area Size</label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {booking.area_size} {booking.area_unit || 'sq ft'}
-                    </p>
-                  </div>
-                )}
-                
-                {booking.rooms_sections && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Rooms/Sections</label>
-                    <p className="mt-1 text-sm text-gray-900">{booking.rooms_sections}</p>
-                  </div>
-                )}
-                
-                {booking.fpv_tour_type && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Tour Type</label>
-                    <p className="mt-1 text-sm text-gray-900">{booking.fpv_tour_type}</p>
-                  </div>
-                )}
-                
-                {booking.video_length && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Video Length</label>
-                    <p className="mt-1 text-sm text-gray-900">{booking.video_length}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
-        <div className="flex justify-end p-6 border-t">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-          >
+        {/* Footer */}
+        <div className="flex justify-end p-6 border-t border-gray-200">
+          <button onClick={onClose} className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800">
             Close
           </button>
         </div>
