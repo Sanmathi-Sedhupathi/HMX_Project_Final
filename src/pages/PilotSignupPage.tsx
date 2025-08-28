@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, Calendar, MapPin, FileText, Camera, Shield } from 'lucide-react';
 import { pilotService } from '../services/api';
 import { CITY_LIST as LOCAL_CITIES } from '../data/cities';
-
+import axios from 'axios';
 interface FormData {
   // Personal Details
   fullName: string;
@@ -14,20 +14,20 @@ interface FormData {
   email: string;
   password: string;
   confirmPassword: string;
-  
+
   // Identification & License Details
   governmentIdProof: string;
   licenseNumber: string;
   issuingAuthority: string;
   licenseIssueDate: string;
   licenseExpiryDate: string;
-  
+
   // Drone Details
   droneModel: string;
   droneSerial: string;
   droneUin: string;
   droneCategory: string;
-  
+
   // Experience & Insurance
   totalFlyingHours: string;
   flightRecords: string;
@@ -38,14 +38,14 @@ interface FormData {
   equipment: string;
   portfolio: string;
   bankAccount: string;
-  
+
   // Document Uploads
   pilotLicenseUrl: string;
   idProofUrl: string;
   trainingCertificateUrl: string;
   photographUrl: string;
   insuranceCertificateUrl: string;
-  
+
   agreeTerms: boolean;
 }
 
@@ -67,20 +67,20 @@ const PilotSignupPage: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    
+
     // Identification & License Details
     governmentIdProof: '',
     licenseNumber: '',
     issuingAuthority: '',
     licenseIssueDate: '',
     licenseExpiryDate: '',
-    
+
     // Drone Details
     droneModel: '',
     droneSerial: '',
     droneUin: '',
     droneCategory: '',
-    
+
     // Experience & Insurance
     totalFlyingHours: '',
     flightRecords: '',
@@ -91,21 +91,26 @@ const PilotSignupPage: React.FC = () => {
     equipment: '',
     portfolio: '',
     bankAccount: '',
-    
+
     // Document Uploads
     pilotLicenseUrl: '',
     idProofUrl: '',
     trainingCertificateUrl: '',
     photographUrl: '',
     insuranceCertificateUrl: '',
-    
+
     agreeTerms: false
   });
-  
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [step, setStep] = useState<number>(1);
   const [cities, setCities] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpError, setOtpError] = useState('');
+
 
   const genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
   const droneCategories = ['Nano', 'Micro', 'Small', 'Medium', 'Large'];
@@ -115,7 +120,7 @@ const PilotSignupPage: React.FC = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
     document.title = 'Pilot Sign Up - HMX FPV Tours';
-    
+
     const fetchCities = async () => {
       try {
         setCities(LOCAL_CITIES);
@@ -130,11 +135,11 @@ const PilotSignupPage: React.FC = () => {
   // Step 1: Personal Details
   const validateStep1 = (): boolean => {
     const newErrors: FormErrors = {};
-    
+
     if (!formData.fullName.trim()) {
       newErrors.fullName = 'Full name is required';
     }
-    
+
     if (!formData.dateOfBirth) {
       newErrors.dateOfBirth = 'Date of birth is required';
     } else {
@@ -145,35 +150,35 @@ const PilotSignupPage: React.FC = () => {
         newErrors.dateOfBirth = 'Must be at least 18 years old';
       }
     }
-    
+
     if (!formData.gender) {
       newErrors.gender = 'Gender is required';
     }
-    
+
     if (!formData.address.trim()) {
       newErrors.address = 'Address is required';
     }
-    
+
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
     }
-    
+
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
+
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-    
+
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -181,29 +186,29 @@ const PilotSignupPage: React.FC = () => {
   // Step 2: Identification & License Details
   const validateStep2 = (): boolean => {
     const newErrors: FormErrors = {};
-    
+
     if (!formData.governmentIdProof) {
       newErrors.governmentIdProof = 'Government ID proof type is required';
     }
-    
+
     if (!formData.licenseNumber.trim()) {
       newErrors.licenseNumber = 'Drone pilot license number is required';
     }
-    
+
     if (!formData.issuingAuthority) {
       newErrors.issuingAuthority = 'Issuing authority is required';
     }
-    
+
     if (!formData.licenseIssueDate) {
       newErrors.licenseIssueDate = 'License issue date is required';
     }
-    
+
     if (!formData.licenseExpiryDate) {
       newErrors.licenseExpiryDate = 'License expiry date is required';
     } else if (new Date(formData.licenseExpiryDate) <= new Date()) {
       newErrors.licenseExpiryDate = 'License must not be expired';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -211,16 +216,16 @@ const PilotSignupPage: React.FC = () => {
   // Step 3: Drone Details (Optional)
   const validateStep3 = (): boolean => {
     const newErrors: FormErrors = {};
-    
+
     // All drone fields are optional, but if one is filled, validate format
     if (formData.droneModel && !formData.droneSerial) {
       newErrors.droneSerial = 'Drone serial number is required when model is provided';
     }
-    
+
     if (formData.droneSerial && !formData.droneModel) {
       newErrors.droneModel = 'Drone model is required when serial number is provided';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -228,31 +233,31 @@ const PilotSignupPage: React.FC = () => {
   // Step 4: Experience & Insurance
   const validateStep4 = (): boolean => {
     const newErrors: FormErrors = {};
-    
+
     if (!formData.totalFlyingHours) {
       newErrors.totalFlyingHours = 'Total flying hours is required';
     } else if (isNaN(Number(formData.totalFlyingHours)) || Number(formData.totalFlyingHours) < 0) {
       newErrors.totalFlyingHours = 'Please enter a valid number of hours';
     }
-    
+
     if (formData.cities.length === 0) {
       newErrors.cities = 'Please select at least one city';
     } else if (formData.cities.length > 2) {
       newErrors.cities = 'Please select maximum 2 cities';
     }
-    
+
     if (!formData.experience.trim()) {
       newErrors.experience = 'Please describe your experience';
     }
-    
+
     if (!formData.equipment.trim()) {
       newErrors.equipment = 'Please describe your equipment';
     }
-    
+
     if (!formData.bankAccount.trim()) {
       newErrors.bankAccount = 'Bank account number is required';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -260,29 +265,29 @@ const PilotSignupPage: React.FC = () => {
   // Step 5: Document Uploads & Terms
   const validateStep5 = (): boolean => {
     const newErrors: FormErrors = {};
-    
+
     if (!formData.pilotLicenseUrl.trim()) {
       newErrors.pilotLicenseUrl = 'Pilot license document is required';
     } else if (!isValidUrl(formData.pilotLicenseUrl)) {
       newErrors.pilotLicenseUrl = 'Please enter a valid URL';
     }
-    
+
     if (!formData.idProofUrl.trim()) {
       newErrors.idProofUrl = 'ID proof document is required';
     } else if (!isValidUrl(formData.idProofUrl)) {
       newErrors.idProofUrl = 'Please enter a valid URL';
     }
-    
+
     if (!formData.photographUrl.trim()) {
       newErrors.photographUrl = 'Recent photograph is required';
     } else if (!isValidUrl(formData.photographUrl)) {
       newErrors.photographUrl = 'Please enter a valid URL';
     }
-    
+
     if (!formData.agreeTerms) {
       newErrors.agreeTerms = 'You must agree to the terms and conditions';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -324,6 +329,39 @@ const PilotSignupPage: React.FC = () => {
       setErrors(prev => ({ ...prev, cities: undefined }));
     }
   };
+  const requestOtp = async () => {
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/request-otp', {
+        email: formData.email,
+        user_type: 'editor',
+        user_data: formData
+      });
+      if (res.data.success) {
+        setOtpSent(true);
+        setOtpError('');
+        alert('OTP sent to your email!');
+      }
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'Failed to send OTP');
+    }
+  };
+
+  const verifyOtp = async () => {
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/verify-otp', {
+        email: formData.email,
+        otp: otp
+      });
+      if (res.data.success) {
+        setOtpVerified(true);
+        setOtpError('');
+        alert('OTP Verified! You can continue.');
+      }
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'Invalid OTP');
+    }
+  };
+
 
   const handleSubmit = async () => {
     if (!validateStep5()) return;
@@ -363,8 +401,6 @@ const PilotSignupPage: React.FC = () => {
         bank_account: formData.bankAccount
       };
 
-      const response = await pilotService.register(applicationData);
-
       setSuccess('Application submitted successfully! Redirecting to login...');
       setTimeout(() => {
         navigate('/login', { replace: true });
@@ -381,6 +417,10 @@ const PilotSignupPage: React.FC = () => {
 
   const handleNextStep = () => {
     if (step === 1 && validateStep1()) {
+      if (!otpVerified) {
+        setOtpError('Please verify OTP before continuing');
+        return;
+      }
       setStep(2);
     } else if (step === 2 && validateStep2()) {
       setStep(3);
@@ -392,6 +432,7 @@ const PilotSignupPage: React.FC = () => {
       handleSubmit();
     }
   };
+
 
   const handlePrevStep = () => {
     if (step > 1) {
@@ -415,6 +456,7 @@ const PilotSignupPage: React.FC = () => {
     );
   }
 
+
   return (
     <div className="min-h-screen pt-20 pb-16 bg-gray-50">
       <div className="container mx-auto px-4">
@@ -424,10 +466,10 @@ const PilotSignupPage: React.FC = () => {
             <h1 className="text-3xl font-bold mb-2">Join Our Pilot Network</h1>
             <p className="text-gray-200">Step {step} of 5: {
               step === 1 ? 'Personal Details' :
-              step === 2 ? 'Identification & License' :
-              step === 3 ? 'Drone Details' :
-              step === 4 ? 'Experience & Insurance' :
-              'Document Uploads'
+                step === 2 ? 'Identification & License' :
+                  step === 3 ? 'Drone Details' :
+                    step === 4 ? 'Experience & Insurance' :
+                      'Document Uploads'
             }</p>
           </div>
 
@@ -443,10 +485,10 @@ const PilotSignupPage: React.FC = () => {
           <div className="p-8">
             <h2 className="text-2xl font-bold mb-6 text-primary-900">
               {step === 1 ? 'Personal Details' :
-               step === 2 ? 'Identification & License Details' :
-               step === 3 ? 'Drone Details (Optional)' :
-               step === 4 ? 'Experience & Insurance' :
-               'Document Uploads & Agreement'}
+                step === 2 ? 'Identification & License Details' :
+                  step === 3 ? 'Drone Details (Optional)' :
+                    step === 4 ? 'Experience & Insurance' :
+                      'Document Uploads & Agreement'}
             </h2>
 
             <form>
@@ -587,6 +629,42 @@ const PilotSignupPage: React.FC = () => {
                     </div>
                     {errors.confirmPassword && <div className="text-red-500 text-sm mt-1">{errors.confirmPassword}</div>}
                   </div>
+                  {/* OTP Section */}
+                  <div>
+                    {!otpSent ? (
+                      <button
+                        type="button"
+                        onClick={requestOtp}
+                        disabled={!formData.email}
+                        className="mt-2 bg-primary-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                      >
+                        Send OTP
+                      </button>
+                    ) : !otpVerified && (
+                      <div>
+                        <label className="block font-semibold mb-1">Enter OTP*</label>
+                        <input
+                          type="text"
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                          placeholder="Enter the 6-digit OTP"
+                          className="w-full border rounded-lg px-4 py-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={verifyOtp}
+                          className="mt-2 bg-primary-600 text-white px-4 py-2 rounded"
+                        >
+                          Verify OTP
+                        </button>
+                        {otpError && <div className="text-red-500 text-sm mt-1">{otpError}</div>}
+                      </div>
+                    )}
+                    {otpVerified && (
+                      <div className="text-green-600 font-semibold">OTP Verified</div>
+                    )}
+                  </div>
+
                 </div>
               )}
 
@@ -1013,11 +1091,10 @@ const PilotSignupPage: React.FC = () => {
                   type="button"
                   onClick={handlePrevStep}
                   disabled={step === 1}
-                  className={`px-6 py-2 rounded-lg font-medium ${
-                    step === 1
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
+                  className={`px-6 py-2 rounded-lg font-medium ${step === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
                 >
                   Previous
                 </button>

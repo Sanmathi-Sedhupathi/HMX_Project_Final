@@ -96,21 +96,6 @@ const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ isOpen, onClo
               <h3 className="text-lg font-semibold mb-3 flex items-center"><Calendar className="mr-2" />Scheduling</h3>
               {renderField('Preferred Date', formatDate(booking.preferred_date))}
               {renderField('Preferred Time', booking.preferred_time)}
-              {renderField('Shooting Hours', booking.shooting_hours)}
-              {renderField('Area Covered', booking.area_covered)}
-            </div>
-
-            <div className="bg-pink-50 rounded-lg p-4 shadow-md">
-              <h3 className="text-lg font-semibold mb-3 flex items-center"><Video className="mr-2" />Video Specs</h3>
-              {renderField('FPV Tour Type', booking.fpv_tour_type)}
-              {renderField('Video Length', booking.video_length)}
-              {renderField('Resolution', booking.resolution)}
-              {renderField('Editing Style', booking.editing_style)}
-              {renderField('Background Music/Voiceover', booking.background_music_voiceover ? 'Yes' : 'No')}
-              {renderField('Color Grading', booking.editing_color_grading ? 'Yes' : 'No')}
-              {renderField('Voiceover Script', booking.voiceover_script ? 'Yes' : 'No')}
-              {renderField('Branding Overlay', booking.branding_overlay ? 'Yes' : 'No')}
-              {renderField('Multiple Revisions', booking.multiple_revisions ? 'Yes' : 'No')}
             </div>
           </div>
 

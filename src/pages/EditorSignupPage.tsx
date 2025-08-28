@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, Video, Clock, FileText, Globe } from 'lucide-react';
 import { editorService } from '../services/api';
+import axios from 'axios';
 
 interface FormData {
   fullName: string;
@@ -43,11 +44,17 @@ const EditorSignupPage: React.FC = () => {
     confirmPassword: '',
     agreeTerms: false
   });
-  
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [step, setStep] = useState<number>(1);
   const [success, setSuccess] = useState<string | null>(null);
-  
+  // ✅ OTP states
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpError, setOtpError] = useState('');
+
+
   useEffect(() => {
     window.scrollTo(0, 0);
     document.title = 'Editor Sign Up - HMX FPV Tours';
@@ -97,7 +104,7 @@ const EditorSignupPage: React.FC = () => {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
-    
+
     // Clear error when user starts typing
     if (errors[name as keyof FormErrors]) {
       setErrors(prev => ({ ...prev, [name]: undefined }));
@@ -106,7 +113,7 @@ const EditorSignupPage: React.FC = () => {
 
   const validateStep1 = (): boolean => {
     const newErrors: FormErrors = {};
-    
+
     if (!formData.fullName.trim()) newErrors.fullName = 'Full name is required';
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
@@ -114,14 +121,14 @@ const EditorSignupPage: React.FC = () => {
     if (!formData.password) newErrors.password = 'Password is required';
     else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
     if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const validateStep2 = (): boolean => {
     const newErrors: FormErrors = {};
-    
+
     if (!formData.role) newErrors.role = 'Role is required';
     if (!formData.yearsExperience) newErrors.yearsExperience = 'Years of experience is required';
     else if (isNaN(Number(formData.yearsExperience)) || Number(formData.yearsExperience) < 0) {
@@ -130,7 +137,7 @@ const EditorSignupPage: React.FC = () => {
     if (!formData.primarySkills.trim()) newErrors.primarySkills = 'Primary skills are required';
     if (!formData.specialization.trim()) newErrors.specialization = 'Specialization is required';
     if (!formData.agreeTerms) newErrors.agreeTerms = 'You must agree to the terms and conditions';
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -154,13 +161,11 @@ const EditorSignupPage: React.FC = () => {
         password: formData.password
       };
 
-      const response = await editorService.register(applicationData);
-      
       setSuccess('Application submitted successfully! Redirecting to login...');
       setTimeout(() => {
         navigate('/login', { replace: true });
       }, 2000);
-      
+
       setFormData({
         fullName: '',
         email: '',
@@ -189,11 +194,12 @@ const EditorSignupPage: React.FC = () => {
 
   const handleNextStep = () => {
     if (step === 1 && validateStep1()) {
-      setStep(2);
+      requestOtp();
     } else if (step === 2) {
       handleSubmit();
     }
   };
+
 
   if (success) {
     return (
@@ -210,6 +216,38 @@ const EditorSignupPage: React.FC = () => {
       </div>
     );
   }
+  const requestOtp = async () => {
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/request-otp', {
+        email: formData.email,
+        user_type: 'editor',
+        user_data: formData
+      });
+      if (res.data.success) {
+        setOtpSent(true);
+        setOtpError('');
+        alert('OTP sent to your email!');
+      }
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'Failed to send OTP');
+    }
+  };
+
+  const verifyOtp = async () => {
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/verify-otp', {
+        email: formData.email,
+        otp: otp
+      });
+      if (res.data.success) {
+        setOtpVerified(true);
+        setOtpError('');
+        alert('OTP Verified! You can continue.');
+      }
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'Invalid OTP');
+    }
+  };
 
   return (
     <div className="min-h-screen pt-20 pb-16 bg-gray-50">
@@ -220,21 +258,21 @@ const EditorSignupPage: React.FC = () => {
             <h1 className="text-3xl font-bold mb-2">Join Our Editor Network</h1>
             <p className="text-gray-200">Step {step} of 2: {step === 1 ? 'Personal Information' : 'Professional Details'}</p>
           </div>
-          
+
           {/* Progress Bar */}
           <div className="bg-gray-200 h-2">
-            <div 
+            <div
               className="bg-primary-600 h-2 transition-all duration-300"
               style={{ width: `${(step / 2) * 100}%` }}
             />
           </div>
-          
+
           {/* Form Content */}
           <div className="p-8">
             <h2 className="text-2xl font-bold mb-6 text-primary-900">
               {step === 1 ? 'Personal Information' : 'Professional Details'}
             </h2>
-            
+
             <form>
               {step === 1 && (
                 <div className="space-y-5">
@@ -243,85 +281,122 @@ const EditorSignupPage: React.FC = () => {
                     <label className="block font-semibold mb-1">Full Name*</label>
                     <div className="relative">
                       <User className="absolute left-3 top-3 text-gray-400" size={18} />
-                      <input 
-                        type="text" 
-                        name="fullName" 
-                        placeholder="Your full name" 
-                        value={formData.fullName} 
-                        onChange={handleChange} 
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                      <input
+                        type="text"
+                        name="fullName"
+                        placeholder="Your full name"
+                        value={formData.fullName}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                     {errors.fullName && <div className="text-red-500 text-sm mt-1">{errors.fullName}</div>}
                   </div>
-                  
+
                   {/* Email */}
                   <div>
                     <label className="block font-semibold mb-1">Email Address*</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
-                      <input 
-                        type="email" 
-                        name="email" 
-                        placeholder="Your email address" 
-                        value={formData.email} 
-                        onChange={handleChange} 
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                      <input
+                        type="email"
+                        name="email"
+                        placeholder="Your email address"
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                     {errors.email && <div className="text-red-500 text-sm mt-1">{errors.email}</div>}
                   </div>
-                  
+
                   {/* Phone */}
                   <div>
                     <label className="block font-semibold mb-1">Phone Number*</label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-3 text-gray-400" size={18} />
-                      <input 
-                        type="text" 
-                        name="phone" 
-                        placeholder="Your phone number" 
-                        value={formData.phone} 
-                        onChange={handleChange} 
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                      <input
+                        type="text"
+                        name="phone"
+                        placeholder="Your phone number"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                     {errors.phone && <div className="text-red-500 text-sm mt-1">{errors.phone}</div>}
                   </div>
-                  
+
                   {/* Password */}
                   <div>
                     <label className="block font-semibold mb-1">Password*</label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
-                      <input 
-                        type="password" 
-                        name="password" 
-                        placeholder="Create a password" 
-                        value={formData.password} 
-                        onChange={handleChange} 
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                      <input
+                        type="password"
+                        name="password"
+                        placeholder="Create a password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                     {errors.password && <div className="text-red-500 text-sm mt-1">{errors.password}</div>}
                   </div>
-                  
+
                   {/* Confirm Password */}
                   <div>
                     <label className="block font-semibold mb-1">Confirm Password*</label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
-                      <input 
-                        type="password" 
-                        name="confirmPassword" 
-                        placeholder="Confirm your password" 
-                        value={formData.confirmPassword} 
-                        onChange={handleChange} 
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        placeholder="Confirm your password"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                     {errors.confirmPassword && <div className="text-red-500 text-sm mt-1">{errors.confirmPassword}</div>}
                   </div>
+                  {/* OTP Section */}
+                  <div>
+                    {!otpSent ? (
+                      <button
+                        type="button"
+                        onClick={requestOtp}
+                        disabled={!formData.email}
+                        className="mt-2 bg-primary-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                      >
+                        Send OTP
+                      </button>
+                    ) : !otpVerified && (
+                      <div>
+                        <label className="block font-semibold mb-1">Enter OTP*</label>
+                        <input
+                          type="text"
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                          placeholder="Enter the 6-digit OTP"
+                          className="w-full border rounded-lg px-4 py-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={verifyOtp}
+                          className="mt-2 bg-primary-600 text-white px-4 py-2 rounded"
+                        >
+                          Verify OTP
+                        </button>
+                        {otpError && <div className="text-red-500 text-sm mt-1">{otpError}</div>}
+                      </div>
+                    )}
+                    {otpVerified && (
+                      <div className="text-green-600 font-semibold"> OTP Verified</div>
+                    )}
+                  </div>
+
+
                 </div>
               )}
 
@@ -509,11 +584,22 @@ const EditorSignupPage: React.FC = () => {
                 )}
                 <button
                   type="button"
-                  onClick={handleNextStep}
+                  onClick={() => {
+                    if (step === 1) {
+                      if (otpVerified) {
+                        setStep(2); // allow next only if OTP verified
+                      } else {
+                        setOtpError('Please verify OTP before continuing');
+                      }
+                    } else {
+                      handleNextStep(); // step 2 -> submit application
+                    }
+                  }}
                   className={`ml-auto bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md transition-colors ${step === 2 ? 'w-full' : ''}`}
                 >
                   {step === 1 ? 'Next' : 'Submit Application'}
                 </button>
+
               </div>
             </form>
           </div>

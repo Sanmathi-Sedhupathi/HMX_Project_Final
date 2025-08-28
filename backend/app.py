@@ -30,6 +30,10 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import threading
+import json
+import random
+import string
+from datetime import datetime, timedelta
 
 # Load environment variables from .env file
 try:
@@ -51,10 +55,10 @@ DATABASE = 'hmx.db'  # Changed from 'backend/hmx.db' to just 'hmx.db'
 
 # Email Configuration
 EMAIL_CONFIG = {
-    'SMTP_SERVER': os.getenv('SMTP_SERVER', 'smtp.gmail.com'),
-    'SMTP_PORT': int(os.getenv('SMTP_PORT', '587')),
-    'EMAIL_ADDRESS': os.getenv('EMAIL_ADDRESS', 'noreply@hmxfpvtours.com'),
-    'EMAIL_PASSWORD': os.getenv('EMAIL_PASSWORD', ''),  # App password for Gmail
+    'SMTP_SERVER': os.getenv('SMTP_SERVER'),  # No default
+    'SMTP_PORT': int(os.getenv('SMTP_PORT', '587')),  # Port can have default
+    'EMAIL_ADDRESS': os.getenv('EMAIL_ADDRESS'),
+    'EMAIL_PASSWORD': os.getenv('EMAIL_PASSWORD'),  # Must be set in env
     'USE_TLS': os.getenv('USE_TLS', 'true').lower() == 'true'
 }
 
@@ -100,6 +104,32 @@ def send_email_async(to_email, subject, body, is_html=False):
     thread = threading.Thread(target=send_email)
     thread.daemon = True
     thread.start()
+    
+    
+def send_email_with_template_helper(to_email, template_name, variables):
+    """Fetch template, replace variables, and send email"""
+    conn = sqlite3.connect("hmx.db")
+    c = conn.cursor()
+    c.execute("SELECT subject, body FROM email_templates WHERE name=?", (template_name,))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        print(f"❌ Template {template_name} not found in DB")
+        return False
+
+    subject, body = row
+    for key, value in variables.items():
+        subject = subject.replace(f"{{{{{key}}}}}", str(value))
+        body = body.replace(f"{{{{{key}}}}}", str(value))
+
+    return send_email_sync(to_email, subject, body, is_html=True)
+
+
+def generate_random_password(length=10):
+    """Generate a random password with letters and digits"""
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
 
 def send_email_sync(to_email, subject, body, is_html=False):
     """Send email synchronously"""
@@ -152,97 +182,7 @@ def send_email_sync(to_email, subject, body, is_html=False):
         print(f"❌ Full traceback: {traceback.format_exc()}")
         return False
 
-def get_application_approval_email(applicant_name, application_type, admin_comments=""):
-    """Generate approval email content"""
-    subject = f"Application Approved - Welcome to HMX FPV Tours!"
 
-    body = f"""
-Dear {applicant_name},
-
-Congratulations! Your {application_type} application has been approved.
-
-Welcome to the HMX FPV Tours team! We're excited to have you on board.
-
-Next Steps:
-1. You can now log in to your dashboard using your registered email and password
-2. Complete your profile setup if needed
-3. Start exploring the available opportunities
-
-{f"Admin Comments: {admin_comments}" if admin_comments else ""}
-
-If you have any questions, please don't hesitate to contact our support team.
-
-Best regards,
-HMX FPV Tours Team
-Email: support@hmxfpvtours.com
-Phone: +91 98765 43210
-"""
-    return subject, body
-
-def get_application_rejection_email(applicant_name, application_type, admin_comments=""):
-    """Generate rejection email content"""
-    subject = f"Application Update - HMX FPV Tours"
-
-    body = f"""
-Dear {applicant_name},
-
-Thank you for your interest in joining HMX FPV Tours as a {application_type}.
-
-After careful review, we regret to inform you that we cannot proceed with your application at this time.
-
-{f"Feedback: {admin_comments}" if admin_comments else ""}
-
-We encourage you to reapply in the future as opportunities become available.
-
-Thank you for your understanding.
-
-Best regards,
-HMX FPV Tours Team
-Email: support@hmxfpvtours.com
-Phone: +91 98765 43210
-"""
-    return subject, body
-
-def get_account_creation_email(user_name, user_email, user_password, user_role):
-    """Generate account creation email with login credentials"""
-    subject = f"Welcome to HMX FPV Tours - Your {user_role.title()} Account is Ready!"
-
-    body = f"""
-Dear {user_name},
-
-Welcome to HMX FPV Tours! Your {user_role} account has been successfully created by our admin team.
-
-LOGIN CREDENTIALS:
-Email: {user_email}
-Password: {user_password}
-
-IMPORTANT SECURITY NOTICE:
-- Please change your password immediately after your first login
-- Keep your login credentials secure and confidential
-- Do not share your password with anyone
-
-NEXT STEPS:
-1. Visit our platform: http://localhost:5173
-2. Log in using the credentials above
-3. Change your password in Settings
-4. Complete your profile setup
-5. Start exploring available opportunities
-
-DASHBOARD ACCESS:
-- Pilot Dashboard: http://localhost:5173/pilot
-- Editor Dashboard: http://localhost:5173/editor
-
-If you have any questions or need assistance, please contact our support team.
-
-Best regards,
-HMX FPV Tours Team
-Email: support@hmxfpvtours.com
-Phone: +91 98765 43210
-
----
-This is an automated message. Please do not reply to this email.
-"""
-    return subject, body
 
 def init_db():
     print("\n=== Initializing Database ===")
@@ -289,9 +229,8 @@ def init_db():
         from datetime import datetime
         from werkzeug.security import generate_password_hash
 
-        password_hash = generate_password_hash("admin123")
-        c.execute('''
-        INSERT INTO users (username, email, password_hash, role, created_at, updated_at)
+        password_hash = generate_password_hash("JustBrew@45")
+        c.execute('''INSERT INTO users (username, email, password_hash, role, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
     ''', (
         "Admin User",
@@ -303,7 +242,7 @@ def init_db():
         ))
         print("\n✅ Admin user created successfully!")
         print(f"Email: {admin_email}")
-        print("Password: admin123")
+        print("Password: JustBrew@45")
     else:
         print("\nℹ️ Admin user already exists")
     # Check if pilots table exists
@@ -417,14 +356,6 @@ def init_db():
     preferred_time TEXT,
     special_requirements TEXT,
     drone_permissions_required BOOLEAN,
-
-    -- Video Specifications
-    fpv_tour_type TEXT,
-    video_length INTEGER,
-    resolution TEXT,
-    background_music_voiceover BOOLEAN,
-    editing_style TEXT,
-
     -- Cost
     base_package_cost REAL,
     total_cost REAL,
@@ -474,11 +405,6 @@ def init_db():
         "preferred_time": "TEXT",
         "special_requirements": "TEXT",
         "drone_permissions_required": "BOOLEAN",
-        "fpv_tour_type": "TEXT",
-        "video_length": "INTEGER",
-        "resolution": "TEXT",
-        "background_music_voiceover": "BOOLEAN",
-        "editing_style": "TEXT",
         "base_package_cost": "REAL",
         "total_cost": "REAL",
         "custom_quote": "TEXT",
@@ -931,12 +857,32 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 description TEXT,
-                category TEXT,
+                
                 status TEXT DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+    
+    # Check if otp_verifications table exists
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='otp_verifications'")
+    if not c.fetchone():
+        print("Creating otp_verifications table...")
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS otp_verifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                otp_code TEXT NOT NULL,
+                user_type TEXT NOT NULL,
+                user_data TEXT NOT NULL,
+                is_verified BOOLEAN DEFAULT FALSE,
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("OTP verifications table created successfully")
+    else:
+        print("OTP verifications table already exists")
     
     # Check if pilot_applications table exists
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pilot_applications'")
@@ -1024,6 +970,87 @@ def init_db():
                 else:
                     print(f"{column_name} column already exists in pilot_applications")
         print("Pilot applications table updated successfully")
+            # Check if email_templates table exists
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='email_templates'")
+    if not c.fetchone():
+        print("Creating email_templates table...")
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS email_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE,
+                subject TEXT,
+                body TEXT
+            )
+        ''')
+
+        default_templates = [
+    ("approval", "Application Approved", 
+     "Dear {{applicant_name}},<br><br>Your {{application_type}} application has been approved.<br>{{admin_comments}}<br><br>Welcome aboard!"),
+
+    ("rejection", "Application Rejected", 
+     "Dear {{applicant_name}},<br><br>Unfortunately, your {{application_type}} application was not successful.<br>{{admin_comments}}"),
+
+    ("forgot_password", "Password Reset Request", 
+     "Hello {{name}},<br><br>Please use this link to reset your password: {{reset_link}}"),
+
+    ("welcome", "Welcome to HMX FPV Tours", 
+     "Hi {{name}},<br><br>We are excited to have you onboard as a {{user_role}}."),
+
+    ("otp", "Your OTP Code", 
+     "Dear {{name}},<br><br>Your OTP is <b>{{otp}}</b>. It expires in 10 minutes."),
+
+    ("order_created", "Your Booking {{booking_id}} is Created", 
+     "Dear {{name}},<br><br>Your booking {{booking_id}} for {{location}} on {{date}} has been created successfully."),
+
+    # 🚀 NEW: Booking status templates
+    ("order_approved", "Your Booking {{booking_id}} is Approved",
+     "Dear {{name}},<br><br>Your booking <b>{{booking_id}}</b> for {{location}} on {{date}} has been <b>approved</b>.<br><br>"
+     "Our pilot/editor team will coordinate with you shortly.<br><br>Regards,<br>Team HMX"),
+
+    ("order_cancelled", "Your Booking {{booking_id}} is Cancelled",
+     "Dear {{name}},<br><br>We regret to inform you that your booking <b>{{booking_id}}</b> has been <b>cancelled</b>.<br>"
+     "Reason: {{reason}}<br><br>If you believe this was a mistake, please contact our support team.<br><br>Regards,<br>Team HMX"),
+
+    ("order_deleted", "Your Booking {{booking_id}} was Deleted",
+     "Dear {{name}},<br><br>Your booking <b>{{booking_id}}</b> has been <b>removed</b> from our system.<br><br>"
+     "If you did not request this or have questions, please reach out to support.<br><br>Regards,<br>Team HMX"),
+
+    # Existing credential templates...
+    ("pilot_credentials", "Your Pilot Account Credentials",
+     "Hi {{name}},<br><br>Your pilot account has been created.<br><br>"
+     "<b>Email:</b> {{email}}<br>"
+     "<b>Password:</b> {{password}}<br><br>"
+     "Please log in and change your password after first login.<br><br>Regards,<br>Team HMX"),
+
+    ("editor_credentials", "Your Editor Account Credentials",
+     "Hi {{name}},<br><br>Your editor account has been created.<br><br>"
+     "<b>Email:</b> {{email}}<br>"
+     "<b>Password:</b> {{password}}<br><br>"
+     "Please log in and change your password after first login.<br><br>Regards,<br>Team HMX"),
+
+    ("referral_credentials", "Your Referral Partner Credentials",
+     "Hi {{name}},<br><br>Your referral partner account has been created.<br><br>"
+     "<b>Email:</b> {{email}}<br>"
+     "<b>Password:</b> {{password}}<br><br>"
+     "You can now log in and start referring clients.<br><br>Regards,<br>Team HMX"),
+
+    ("client_credentials", "Your Client Account Credentials",
+     "Hi {{name}},<br><br>Your client account has been created.<br><br>"
+     "<b>Email:</b> {{email}}<br>"
+     "<b>Password:</b> {{password}}<br><br>"
+     "You can log in and follow up on your bookings.<br><br>"
+     "Please change your password after first login.<br><br>Regards,<br>Team HMX"),
+    ]
+
+
+        for tpl in default_templates:
+            c.execute(
+                "INSERT OR IGNORE INTO email_templates (name, subject, body) VALUES (?, ?, ?)", tpl
+            )
+        print("Default email templates inserted")
+    else:
+        print("Email_templates table already exists")
+
 
     conn.commit()
     conn.close()
@@ -1049,6 +1076,111 @@ def get_db():
     print("===================\n")
     
     return conn
+
+# OTP Helper Functions
+def generate_otp():
+    """Generate a 6-digit OTP"""
+    return ''.join(random.choices(string.digits, k=6))
+
+def store_otp(email, user_type, user_data):
+    """Store OTP in database for verification"""
+    try:
+        otp_code = generate_otp()
+        expires_at = datetime.now() + timedelta(minutes=10)  # OTP expires in 10 minutes
+        
+        # Save consistently as ISO string
+        expires_at_str = expires_at.isoformat(sep=" ", timespec="seconds")
+        # 👉 Example: "2025-08-28 13:15:42"
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Delete any existing OTP for this email
+        cursor.execute('DELETE FROM otp_verifications WHERE email = ?', (email,))
+        
+        # Store new OTP
+        cursor.execute('''
+            INSERT INTO otp_verifications (email, otp_code, user_type, user_data, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (email, otp_code, user_type, json.dumps(user_data), expires_at_str))
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"OTP stored for {email}: {otp_code} (expires at {expires_at_str})")
+        return otp_code
+        
+    except Exception as e:
+        print(f"Error storing OTP: {str(e)}")
+        return None
+
+def verify_otp(email, otp_code):
+    """Verify OTP and return user data if valid"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get OTP record
+        cursor.execute('''
+            SELECT otp_code, user_type, user_data, expires_at, is_verified
+            FROM otp_verifications 
+            WHERE email = ?
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (email,))
+        
+        otp_record = cursor.fetchone()
+        
+        if not otp_record:
+            conn.close()
+            return {'success': False, 'error': 'No OTP found for this email'}
+        
+        stored_otp, user_type, user_data_json, expires_at, is_verified = otp_record
+        
+        # Handle datetime parsing safely (with microseconds)
+        try:
+            expires_at = datetime.fromisoformat(expires_at)
+        except Exception:
+            try:
+                expires_at = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S.%f')
+            except Exception:
+                expires_at = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+        
+        # Check if OTP is already verified
+        if is_verified:
+            conn.close()
+            return {'success': False, 'error': 'OTP already used'}
+        
+        # Check if OTP is expired
+        if datetime.now() > expires_at:
+            conn.close()
+            return {'success': False, 'error': 'OTP has expired'}
+        
+        # Verify OTP code
+        if stored_otp != otp_code:
+            conn.close()
+            return {'success': False, 'error': 'Invalid OTP'}
+        
+        # Mark OTP as verified
+        cursor.execute(
+            'UPDATE otp_verifications SET is_verified = TRUE WHERE email = ?',
+            (email,)
+        )
+        conn.commit()
+        conn.close()
+        
+        # Return success with user data
+        return {
+            'success': True,
+            'user_type': user_type,
+            'user_data': json.loads(user_data_json)
+        }
+        
+    except Exception as e:
+        print(f"Error verifying OTP: {str(e)}")
+        return {'success': False, 'error': 'Server error while verifying OTP'}
+
+
 
 # Initialize database
 init_db()
@@ -1565,6 +1697,7 @@ def verify_token(current_user):
         
         # Return the user data with the role from the token
         return jsonify({
+            'id': current_user.get('id', current_user['user_id']),
             'user_id': current_user['user_id'],
             'email': current_user['email'],
             'role': current_user['role'],
@@ -1619,32 +1752,81 @@ def get_bookings(current_user):
         data = request.json
         print("\n=== Creating New Booking ===")
         try:
-            # Required fields
+            conn = get_db()
+            cursor = conn.cursor()
+
+            # ✅ Determine which user to attach
+            if current_user['role'] == 'client':
+                # Logged-in client
+                client_user_id = current_user['id']
+                client_email = current_user['email']
+                client_name = current_user.get('contact_name') or current_user.get('username') or "Client"
+            else:
+                # Admin creating on behalf of a client (old logic)
+                client_email = data.get("client_email")
+                client_name = data.get("client_name", "New Client")
+                cursor.execute("SELECT id FROM users WHERE email=?", (client_email,))
+                user = cursor.fetchone()
+                if not user:
+                    # Create random password
+                    raw_password = generate_random_password()
+                    password_hash = generate_password_hash(raw_password)
+
+                    # Insert into users
+                    cursor.execute('''
+                        INSERT INTO users (username, email, password_hash, role, created_at, updated_at)
+                        VALUES (?, ?, ?, 'client', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ''', (client_name, client_email, password_hash))
+                    client_user_id = cursor.lastrowid
+
+                    # Insert into business_clients with minimal info
+                    cursor.execute('''
+                        INSERT INTO business_clients (
+                            business_name, registration_number, organization_type,
+                            incorporation_date, official_address, official_email,
+                            phone, contact_name, contact_person_designation,
+                            email, password_hash, status, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ''', ("", "", "", "", "", client_email, "", "", "", client_email, password_hash))
+
+                    # Send credentials email
+                    send_email_with_template_helper(
+                        to_email=client_email,
+                        template_name="client_credentials",
+                        variables={
+                            "name": client_name,
+                            "email": client_email,
+                            "password": raw_password
+                        }
+                    )
+                    conn.commit()
+                else:
+                    client_user_id = user["id"]
+
+            # --- Cost + Earnings calculation (your existing logic) ---
+            # Required fields check
             required_fields = [
                 'location_address', 'property_type', 'indoor_outdoor', 'area_size',
-                'rooms_sections', 'preferred_date', 'preferred_time', 'fpv_tour_type',
-                'video_length', 'resolution', 'editing_style'
+                'rooms_sections', 'preferred_date', 'preferred_time'
             ]
             for field in required_fields:
                 if field not in data or not data[field]:
                     return jsonify({'message': f'Missing required field: {field}'}), 400
 
-            # Parse numbers
             area_size = float(data['area_size'])
             rooms_sections = int(data['rooms_sections'])
-            video_length = int(data['video_length'])
             num_floors = int(data.get('num_floors', 1))
 
-            # --- Cost Calculation ---
             base_cost, final_cost, error = calculate_cost(
                 data['property_type'], area_size, num_floors
             )
             if error:
                 return jsonify({'message': error}), 400
 
-            total_cost = final_cost  # can extend later with tax/discounts
+            total_cost = final_cost
+            has_referral = bool(data.get('referral_id'))
 
-            # --- Earnings Split ---
             def calculate_earnings(total_cost, has_referral):
                 pilot_pct = 0.50
                 editor_pct = 0.15
@@ -1662,63 +1844,70 @@ def get_bookings(current_user):
                     "hmx_earnings": round(total_cost * hmx_pct, 2),
                     "gateway_fees": round(total_cost * gateway_pct, 2),
                 }
-
             has_referral = bool(data.get('referral_id'))
             earn = calculate_earnings(total_cost, has_referral)
 
-            # --- Insert into DB ---
-            conn = get_db()
-            cursor = conn.cursor()
+            # --- Insert booking ---
             cursor.execute('''
-        INSERT INTO bookings (
-            user_id, location_address, gps_link, property_type, indoor_outdoor,
-            area_size, area_unit, rooms_sections, num_floors,
-            preferred_date, preferred_time, special_requirements, drone_permissions_required,
-            fpv_tour_type, video_length, resolution, background_music_voiceover, editing_style,
-            base_package_cost, total_cost, custom_quote,
-            status, payment_status,
-            admin_comments, description,
-            referral_id,
-            pilot_earnings, editor_earnings, referral_earnings, hmx_earnings, gateway_fees
-        ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?,
-            'pending', 'pending',
-            ?, ?,
-            ?,
-            ?, ?, ?, ?, ?
-        )
-    ''', (
-        current_user['id'],
-        data['location_address'],
-        data.get('gps_link', ''),
-        data['property_type'],
-        data['indoor_outdoor'],
-        area_size,
-        data.get('area_unit', 'sq_ft'),
-        rooms_sections,
-        num_floors,
-        data['preferred_date'],
-        data['preferred_time'],
-        data.get('special_requirements', ''),
-        data.get('drone_permissions_required', False),
-        data['fpv_tour_type'],
-        video_length,
-        data['resolution'],
-        data.get('background_music_voiceover', False),
-        data['editing_style'],
-        base_cost, total_cost, data.get('custom_quote'),
-        data.get('admin_comments', ''),
-        data.get('description', ''),
-        data.get('referral_id'),
-        earn['pilot_earnings'], earn['editor_earnings'],
-        earn['referral_earnings'], earn['hmx_earnings'], earn['gateway_fees']
-    ))
+                INSERT INTO bookings (
+                    user_id, location_address, gps_link, property_type, indoor_outdoor,
+                    area_size, area_unit, rooms_sections, num_floors,
+                    preferred_date, preferred_time, special_requirements, drone_permissions_required,
+                    base_package_cost, total_cost, custom_quote,
+                    status, payment_status,
+                    admin_comments, description,
+                    referral_id,
+                    pilot_earnings, editor_earnings, referral_earnings, hmx_earnings, gateway_fees
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+            ''', (
+                (
+    client_user_id,
+    data['location_address'],
+    data['gps_link'],
+    data['property_type'],
+    data['indoor_outdoor'],
+    data['area_size'],
+    data['area_unit'],
+    data['rooms_sections'],
+    data['num_floors'],
+    data['preferred_date'],
+    data['preferred_time'],
+    data.get('special_requirements',''),
+    data.get('drone_permissions_required',0),
+    base_cost,
+    total_cost,
+    data.get('custom_quote',''),
+    'pending',
+    'pending',
+    data.get('admin_comments',''),
+    data.get('description',''),
+    data.get('referral_id'),
+    earn['pilot_earnings'],
+    earn['editor_earnings'],
+    earn['referral_earnings'],
+    earn['hmx_earnings'],
+    earn['gateway_fees']
+    )
 
+            ))
 
             conn.commit()
             booking_id = cursor.lastrowid
             conn.close()
+
+            # Notify client (not admin!) about booking creation
+            send_email_with_template_helper(
+                to_email=client_email,
+                template_name="order_created",
+                variables={
+                    "name": client_name,
+                    "booking_id": booking_id,
+                    "location": data['location_address'],
+                    "date": data['preferred_date']
+                }
+            )
 
             return jsonify({
                 'message': 'Booking created successfully',
@@ -3098,7 +3287,7 @@ def get_payments(current_user):
         payments = conn.execute('''
             SELECT 
                 p.*,
-                b.industry,
+                b.property_type,
                 b.location,
                 u.contact_name as client_name,
                 u.business_name as client_company,
@@ -3129,7 +3318,7 @@ def get_payments(current_user):
                 'transaction_id': payment[5],
                 'created_at': payment[6],
                 'updated_at': payment[7],
-                'industry': payment[8],
+                'property_type': payment[8],
                 'location': payment[9],
                 'client_name': payment[10],
                 'client_company': payment[11],
@@ -3164,7 +3353,7 @@ def manage_cancellations(current_user):
         try:
             conn = get_db()
             cancellations = conn.execute('''
-                SELECT c.*, b.industry, b.location 
+                SELECT c.*, b.property_type, b.location 
                 FROM cancellations c
                 JOIN bookings b ON c.booking_id = b.id
                 ORDER BY c.created_at DESC
@@ -3341,7 +3530,7 @@ def get_admin_orders(current_user):
         
         try:
             # Validate required fields
-            required_fields = ['client_name', 'client_email', 'pilot_id', 'industry', 'preferred_date', 'location', 'duration', 'payment_amount']
+            required_fields = ['client_name', 'client_email', 'pilot_id', 'property_type', 'preferred_date', 'location', 'duration', 'payment_amount']
             for field in required_fields:
                 if field not in data:
                     return jsonify({'message': f'Missing required field: {field}'}), 400
@@ -3382,13 +3571,13 @@ def get_admin_orders(current_user):
 
             cursor.execute('''
                 INSERT INTO bookings (
-                    pilot_id, industry, preferred_date, location, 
+                    pilot_id, property_type, preferred_date, location, 
                     duration, requirements, status, payment_amount, payment_status,
                     client_notes
                 ) VALUES (?, ?, ?, ?, ?, ?, 'assigned', ?, 'pending', ?)
             ''', (
                 pilot_id,
-                data['industry'], 
+                data['property_type'], 
                 data['preferred_date'],
                 data['location'], 
                 duration, 
@@ -3425,7 +3614,7 @@ def get_admin_orders(current_user):
         base_query = '''
             SELECT b.*,
                    COALESCE(u.username, 'Unknown Client') as client_name,
-                   u.username, u.email as client_email, u.id as client_id,
+                   u.username, u.email as client_email, u.id as client_id, b.property_type,
                    p.name as pilot_name, p.email as pilot_email, p.id as pilot_id_actual,
                    e.name as editor_name, e.email as editor_email, e.id as editor_id_actual,
                    r.name as referral_name, r.id as referral_id_actual
@@ -3495,7 +3684,7 @@ def get_admin_orders(current_user):
                 'location_address': order_dict.get('location_address', ''),
                 'gps_link': order_dict.get('gps_link', ''),
                 'property_type': order_dict.get('property_type', ''),
-                'industry': order_dict.get('category', ''),  # Use category instead of industry
+                
                 'indoor_outdoor': order_dict.get('indoor_outdoor', ''),
                 'area_size': order_dict.get('area_size', 0),
                 'area_unit': order_dict.get('area_unit', ''),
@@ -3510,11 +3699,7 @@ def get_admin_orders(current_user):
                 'shooting_hours': order_dict.get('shooting_hours', 0),
                 'area_covered': order_dict.get('area_covered', 0),
 
-                # Video Specifications
-                'fpv_tour_type': order_dict.get('fpv_tour_type', ''),
-                'video_length': order_dict.get('video_length', 0),
-                'resolution': order_dict.get('resolution', ''),
-                'editing_style': order_dict.get('editing_style', ''),
+                
                 'background_music_voiceover': bool(order_dict.get('background_music_voiceover', 0)),
                 'editing_color_grading': bool(order_dict.get('editing_color_grading', 0)),
                 'voiceover_script': bool(order_dict.get('voiceover_script', 0)),
@@ -3621,10 +3806,25 @@ def manage_order(current_user, order_id):
         conn = get_db()
         cursor = conn.cursor()
 
+        # Fetch order (needed for notifications)
+        cursor.execute('''
+            SELECT b.*, u.username AS client_name, u.email AS client_email
+            FROM bookings b
+            LEFT JOIN users u ON b.user_id = u.id
+            WHERE b.id = ?
+        ''', (order_id,))
+        order = cursor.fetchone()
+
+        if not order:
+            conn.close()
+            return jsonify({'message': 'Order not found'}), 404
+
         if request.method == 'PUT':
             data = request.json
+            print("=== PUT Request Received ===")
+            print("Raw JSON:", request.data)
+            print("Parsed JSON:", data)
 
-            # Update order status, assignments, or comments
             update_fields = []
             update_values = []
 
@@ -3646,11 +3846,38 @@ def manage_order(current_user, order_id):
 
             if update_fields:
                 update_fields.append('updated_at = CURRENT_TIMESTAMP')
+                query = f"UPDATE bookings SET {', '.join(update_fields)} WHERE id = ?"
                 update_values.append(order_id)
 
-                query = f"UPDATE bookings SET {', '.join(update_fields)} WHERE id = ?"
+                # ✅ Debug prints AFTER values are defined
+                print("Query:", query)
+                print("Values:", update_values)
+
                 cursor.execute(query, update_values)
                 conn.commit()
+
+                # Notify client based on status
+                if 'status' in data:
+                    if data['status'] == "approved":
+                        send_email_with_template_helper(
+                            to_email=order['client_email'],
+                            template_name="order_approved",
+                            variables={
+                                "name": order['client_name'],
+                                "booking_id": order_id,
+                                "date": order['preferred_date']
+                            }
+                        )
+                    elif data['status'] == "rejected":
+                        send_email_with_template_helper(
+                            to_email=order['client_email'],
+                            template_name="order_rejected",
+                            variables={
+                                "name": order['client_name'],
+                                "booking_id": order_id,
+                                "reason": data.get("admin_comments", "Not specified")
+                            }
+                        )
 
             conn.close()
             return jsonify({'message': 'Order updated successfully'})
@@ -3659,10 +3886,24 @@ def manage_order(current_user, order_id):
             cursor.execute('DELETE FROM bookings WHERE id = ?', (order_id,))
             conn.commit()
             conn.close()
+
+            # Notify client after deletion
+            send_email_with_template_helper(
+                to_email=order['client_email'],
+                template_name="order_deleted",
+                variables={
+                    "name": order['client_name'],
+                    "booking_id": order_id
+                }
+            )
             return jsonify({'message': 'Order deleted successfully'})
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': str(e)}), 500
+
+
 
 @app.route('/api/admin/dashboard/stats', methods=['GET', 'OPTIONS'])
 @token_required
@@ -3932,9 +4173,9 @@ def pilot_register():
         ''', (
             data['name'],
             data['full_name'],
+            password_hash,
             data['email'],
             data['phone'],
-            password_hash,
             password_hash,  # For new password_hash column
             data['date_of_birth'],
             data['gender'],
@@ -6229,11 +6470,9 @@ def get_editor_earnings(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Admin endpoints for adding entities directly to main database
 @app.route('/api/admin/pilots/create', methods=['POST'])
 @token_required
 def add_pilot_direct(current_user):
-    """Add pilot directly to main pilots table"""
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Unauthorized'}), 403
 
@@ -6243,21 +6482,22 @@ def add_pilot_direct(current_user):
         cursor = conn.cursor()
 
         # Hash the password
-        password_hash = generate_password_hash(data.get('password', 'pilot123'))
+        password = data.get('password', 'pilot123')
+        password_hash = generate_password_hash(password)
 
         cursor.execute('''
             INSERT INTO pilots (
-                name, full_name, email, phone, password, password_hash, date_of_birth, gender, address,
+                name, full_name, email, phone, password_hash, date_of_birth, gender, address,
                 license_number, issuing_authority, license_issue_date, license_expiry_date,
                 drone_model, drone_serial, drone_uin, drone_category, total_flying_hours,
                 insurance_policy, insurance_validity, government_id_proof,
                 pilot_license_url, id_proof_url, training_certificate_url, photograph_url,
                 insurance_certificate_url, portfolio_url, cities, experience, equipment,
                 flight_records, bank_account, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data.get('name'), data.get('full_name'), data.get('email'), data.get('phone'),
-            data.get('password'), password_hash, data.get('date_of_birth'), data.get('gender'), data.get('address'),
+            password_hash, data.get('date_of_birth'), data.get('gender'), data.get('address'),
             data.get('license_number'), data.get('issuing_authority'), data.get('license_issue_date'),
             data.get('license_expiry_date'), data.get('drone_model'), data.get('drone_serial'),
             data.get('drone_uin'), data.get('drone_category'), data.get('total_flying_hours'),
@@ -6271,33 +6511,26 @@ def add_pilot_direct(current_user):
         conn.commit()
         conn.close()
 
-        # Send welcome email with credentials
-        try:
-            pilot_name = data.get('name') or data.get('full_name') or 'Pilot'
-            pilot_email = data.get('email')
-            pilot_password = data.get('password')
-
-            if pilot_email and pilot_password:
-                subject, body = get_account_creation_email(
-                    pilot_name, pilot_email, pilot_password, 'pilot'
-                )
-                send_email_async(pilot_email, subject, body)
-                print(f"Welcome email sent to pilot: {pilot_email}")
-            else:
-                print("Missing email or password for pilot welcome email")
-        except Exception as e:
-            print(f"Failed to send pilot welcome email: {str(e)}")
+        # Send via template system
+        send_email_with_template_helper(
+            to_email=data.get('email'),
+            template_name="pilot_credentials",
+            variables={
+                "name": data.get('full_name') or data.get('name'),
+                "email": data.get('email'),
+                "password": password
+            }
+        )
 
         return jsonify({'message': 'Pilot added successfully'}), 201
 
     except Exception as e:
-        print(f"Error adding pilot: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/admin/editors/create', methods=['POST'])
 @token_required
 def add_editor_direct(current_user):
-    """Add editor directly to main editors table"""
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Unauthorized'}), 403
 
@@ -6307,7 +6540,8 @@ def add_editor_direct(current_user):
         cursor = conn.cursor()
 
         # Hash the password
-        password_hash = generate_password_hash(data.get('password', 'editor123'))
+        password = data.get('password', 'editor123')
+        password_hash = generate_password_hash(password)
 
         cursor.execute('''
             INSERT INTO editors (
@@ -6326,30 +6560,24 @@ def add_editor_direct(current_user):
         conn.commit()
         conn.close()
 
-        # Send welcome email with credentials
-        try:
-            editor_name = data.get('name') or data.get('full_name') or 'Editor'
-            editor_email = data.get('email')
-            editor_password = data.get('password')
-
-            if editor_email and editor_password:
-                subject, body = get_account_creation_email(
-                    editor_name, editor_email, editor_password, 'editor'
-                )
-                send_email_async(editor_email, subject, body)
-                print(f"Welcome email sent to editor: {editor_email}")
-            else:
-                print("Missing email or password for editor welcome email")
-        except Exception as e:
-            print(f"Failed to send editor welcome email: {str(e)}")
+        # Send via template system
+        send_email_with_template_helper(
+            to_email=data.get('email'),
+            template_name="editor_credentials",
+            variables={
+                "name": data.get('full_name') or data.get('name'),
+                "email": data.get('email'),
+                "password": password
+            }
+        )
 
         return jsonify({'message': 'Editor added successfully'}), 201
 
     except Exception as e:
-        print(f"Error adding editor: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/referrals', methods=['POST'])
+
+@app.route('/api/admin/referrals/create', methods=['POST'])
 @token_required
 def add_referral_direct(current_user):
     """Add referral directly to main referrals table"""
@@ -6361,17 +6589,34 @@ def add_referral_direct(current_user):
         conn = get_db()
         cursor = conn.cursor()
 
+        # Generate or use provided password
+        password = data.get('password', 'referral123')
+        password_hash = generate_password_hash(password)
+
         cursor.execute('''
-            INSERT INTO referrals (name, email, phone, status, commission_rate, total_earnings)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO referrals (
+                name, email, phone, status, commission_rate, total_earnings, password_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data.get('name'), data.get('email'), data.get('phone'),
             data.get('status', 'active'), data.get('commission_rate', 10.0),
-            data.get('total_earnings', 0.0)
+            data.get('total_earnings', 0.0), password_hash, datetime.now()
         ))
 
         conn.commit()
         conn.close()
+
+        # Send welcome + credentials email
+        if data.get('email'):
+            send_email_with_template_helper(
+                to_email=data['email'],
+                template_name="referral_credentials",
+                variables={
+                    "name": data.get('name') or "Referral Partner",
+                    "email": data.get('email'),
+                    "password": password
+                }
+            )
 
         return jsonify({'message': 'Referral added successfully'}), 201
 
@@ -6393,7 +6638,7 @@ def add_booking_direct(current_user):
 
         cursor.execute('''
             INSERT INTO bookings (
-                user_id, pilot_id, editor_id, referral_id, industry, category,
+                user_id, pilot_id, editor_id, referral_id, property_type, category,
                 preferred_date, location, duration, requirements, status,
                 admin_comments, pilot_notes, client_notes, payment_status,
                 payment_amount, drive_link, property_type, location_address,
@@ -6402,7 +6647,7 @@ def add_booking_direct(current_user):
         ''', (
             data.get('user_id') or None, data.get('pilot_id') or None,
             data.get('editor_id') or None, data.get('referral_id') or None,
-            data.get('industry'), data.get('category'), data.get('preferred_date'),
+            data.get('property_type'), data.get('category'), data.get('preferred_date'),
             data.get('location'), data.get('duration'), data.get('requirements'),
             data.get('status', 'pending'), data.get('admin_comments'),
             data.get('pilot_notes'), data.get('client_notes'),
@@ -6411,14 +6656,45 @@ def add_booking_direct(current_user):
             data.get('location_address'), data.get('preferred_time')
         ))
 
+        booking_id = cursor.lastrowid
         conn.commit()
         conn.close()
 
-        return jsonify({'message': 'Order added successfully'}), 201
+        # ✅ Notify client about booking
+        try:
+            # Get client email
+            client_email = None
+            client_name = "User"
+            if data.get('user_id'):
+                conn = get_db()
+                c2 = conn.cursor()
+                c2.execute("SELECT email, contact_name, business_name FROM users WHERE id = ?", (data['user_id'],))
+                u = c2.fetchone()
+                conn.close()
+                if u:
+                    client_email = u['email']
+                    client_name = u['contact_name'] or u['business_name'] or "User"
+
+            if client_email:
+                send_email_with_template_helper(
+                    to_email=client_email,
+                    template_name="order_created",
+                    variables={
+                        "name": client_name,
+                        "booking_id": booking_id,
+                        "location": data.get("location") or data.get("location_address", ""),
+                        "date": data.get("preferred_date", "")
+                    }
+                )
+        except Exception as e:
+            print(f"Failed to send booking notification: {str(e)}")
+
+        return jsonify({'message': 'Order added successfully', 'booking_id': booking_id}), 201
 
     except Exception as e:
         print(f"Error adding order: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 # Password management endpoints
 @app.route('/api/auth/change-password', methods=['POST'])
@@ -6475,91 +6751,278 @@ def change_password(current_user):
         print(f"Error changing password: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/reset-password', methods=['POST'])
-@token_required
-def admin_reset_password(current_user):
-    """Allow admin to reset user password"""
-    if current_user['role'] != 'admin':
-        return jsonify({'error': 'Unauthorized'}), 403
-
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password_via_otp():
+    """
+    Reset password for users based on verified OTP.
+    Special case: business_clients -> update both business_clients and users.
+    """
     try:
         data = request.get_json()
-        user_id = data.get('user_id')
-        user_role = data.get('user_role')  # 'pilot', 'editor', 'user'
+        email = data.get('email')
         new_password = data.get('new_password')
 
-        if not user_id or not user_role or not new_password:
-            return jsonify({'error': 'User ID, role, and new password are required'}), 400
+        if not email or not new_password:
+            return jsonify({'error': 'Email and new password are required'}), 400
 
         conn = get_db()
         cursor = conn.cursor()
 
-        # Hash new password
-        new_password_hash = generate_password_hash(new_password)
+        hashed_pw = generate_password_hash(new_password)
+        updated = False
 
-        # Update password based on role
-        if user_role == 'pilot':
-            cursor.execute('UPDATE pilots SET password_hash = ? WHERE id = ?',
-                         (new_password_hash, user_id))
-        elif user_role == 'editor':
-            cursor.execute('UPDATE editors SET password_hash = ? WHERE id = ?',
-                         (new_password_hash, user_id))
-        else:
-            cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                         (new_password_hash, user_id))
+        # 1️⃣ Check business_clients
+        cursor.execute('SELECT id FROM business_clients WHERE email = ?', (email,))
+        row = cursor.fetchone()
+        if row:
+            user_id = row[0]
+            cursor.execute('UPDATE business_clients SET password_hash = ? WHERE id = ?', (hashed_pw, user_id))
+            cursor.execute('UPDATE users SET password_hash = ? WHERE email = ?', (hashed_pw, email))
+            updated = True
+
+        # 2️⃣ Check pilots
+        if not updated:
+            cursor.execute('SELECT id FROM pilots WHERE email = ?', (email,))
+            row = cursor.fetchone()
+            if row:
+                user_id = row[0]
+                cursor.execute('UPDATE pilots SET password_hash = ? WHERE id = ?', (hashed_pw, user_id))
+                updated = True
+
+        # 3️⃣ Check editors
+        if not updated:
+            cursor.execute('SELECT id FROM editors WHERE email = ?', (email,))
+            row = cursor.fetchone()
+            if row:
+                user_id = row[0]
+                cursor.execute('UPDATE editors SET password_hash = ? WHERE id = ?', (hashed_pw, user_id))
+                updated = True
+
+        # 4️⃣ Check referrals
+        if not updated:
+            cursor.execute('SELECT id FROM referrals WHERE email = ?', (email,))
+            row = cursor.fetchone()
+            if row:
+                user_id = row[0]
+                cursor.execute('UPDATE referrals SET password_hash = ? WHERE id = ?', (hashed_pw, user_id))
+                updated = True
+
+        if not updated:
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
 
         conn.commit()
         conn.close()
-
-        return jsonify({'message': 'Password reset successfully'}), 200
+        return jsonify({'success': True, 'message': 'Password reset successfully'}), 200
 
     except Exception as e:
         print(f"Error resetting password: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Email testing endpoint
-@app.route('/api/admin/test-email', methods=['POST'])
+
+
+@app.route('/api/auth/request-otp', methods=['POST'])
+def request_otp():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        user_type = data.get('user_type')
+        user_data = data.get('user_data', {})  # optional extra signup data
+
+        if not email or not user_type:
+            return jsonify({'success': False, 'error': 'Missing email or user_type'}), 400
+
+        otp = store_otp(email, user_type, user_data)
+        if not otp:
+            return jsonify({'success': False, 'error': 'Failed to generate OTP'}), 500
+
+        # 🔑 Use template system instead of raw function
+        send_email_with_template_helper(
+            to_email=email,
+            template_name="otp",
+            variables={
+                "name": user_data.get("name", "User"),
+                "otp": otp
+            }
+        )
+
+        return jsonify({'success': True, 'message': 'OTP sent successfully'}), 200
+
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/auth/verify-otp', methods=['POST'])
+def verify_otp_route():
+    data = request.get_json()
+    email = data.get('email')
+    otp_code = data.get('otp') or data.get('otp_code')
+
+    result = verify_otp(email, otp_code)
+    if not result['success']:
+        return jsonify(result), 400
+
+    return jsonify({'success': True, 'message': 'OTP verified successfully'})
+@app.route('/api/admin/email-templates/<string:template_name>', methods=['PUT'])
+def update_email_template(template_name):
+    """Update subject/body of a template"""
+    data = request.get_json()
+    subject = data.get("subject")
+    body = data.get("body")
+
+    if not subject or not body:
+        return jsonify({"error": "Both subject and body are required"}), 400
+
+    conn = sqlite3.connect("hmx.db")
+    c = conn.cursor()
+    c.execute("UPDATE email_templates SET subject=?, body=? WHERE name=?", (subject, body, template_name))
+    conn.commit()
+    updated = c.rowcount
+    conn.close()
+
+    if updated:
+        return jsonify({"message": "Template updated successfully"})
+    else:
+        return jsonify({"error": "Template not found"}), 404
+
+
+@app.route('/api/admin/send-email', methods=['POST'])
+def send_email_with_template():
+    """Send email using a stored template + variables"""
+    data = request.get_json()
+    template_name = data.get("template")
+    recipient = data.get("to")
+    variables = data.get("variables", {})
+
+    if not template_name or not recipient:
+        return jsonify({"error": "Template name and recipient email are required"}), 400
+
+    # Fetch template
+    conn = sqlite3.connect("hmx.db")
+    c = conn.cursor()
+    c.execute("SELECT subject, body FROM email_templates WHERE name=?", (template_name,))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "Template not found"}), 404
+
+    subject, body = row
+
+    # Replace placeholders {{var}}
+    for key, value in variables.items():
+        subject = subject.replace(f"{{{{{key}}}}}", value)
+        body = body.replace(f"{{{{{key}}}}}", value)
+
+    # Send email
+    success = send_email_sync(recipient, subject, body, is_html=True)
+
+    return jsonify({
+        "success": success,
+        "to": recipient,
+        "subject": subject,
+        "body": body
+    })
+# -------------------------------
+# Admin Email Templates Management
+# -------------------------------
+@app.route('/api/admin/email-templates', methods=['GET'])
 @token_required
-def test_email(current_user):
-    """Test email configuration by sending a test email"""
+def list_email_templates(current_user):
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, subject, body FROM email_templates")
+        templates = [
+            {"name": row[0], "subject": row[1], "body": row[2]}
+            for row in cursor.fetchall()
+        ]
+        conn.close()
+        return jsonify(templates), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/email-templates/<string:name>', methods=['GET'])
+@token_required
+def get_email_template(current_user, name):
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, subject, body FROM email_templates WHERE name = ?", (name,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({'error': f'Template {name} not found'}), 404
+
+        return jsonify({"name": row[0], "subject": row[1], "body": row[2]}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/email-templates/<string:name>', methods=['PUT'])
+@token_required
+def update_email_template_admin(current_user, name):
     if current_user['role'] != 'admin':
         return jsonify({'error': 'Unauthorized'}), 403
 
     try:
         data = request.get_json()
-        test_email = data.get('email')
+        subject = data.get("subject")
+        body = data.get("body")
 
-        if not test_email:
-            return jsonify({'error': 'Email address is required'}), 400
+        if not subject or not body:
+            return jsonify({'error': 'Both subject and body are required'}), 400
 
-        # Send test email
-        subject = "HMX FPV Tours - Email Configuration Test"
-        body = f"""
-Hello,
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE email_templates
+            SET subject = ?, body = ?
+            WHERE name = ?
+        """, (subject, body, name))
+        conn.commit()
+        conn.close()
 
-This is a test email to verify that your HMX FPV Tours email configuration is working correctly.
-
-If you received this email, your email settings are properly configured!
-
-Test Details:
-- Sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- SMTP Server: {EMAIL_CONFIG['SMTP_SERVER']}
-- From: {EMAIL_CONFIG['EMAIL_ADDRESS']}
-- To: {test_email}
-
-Best regards,
-HMX FPV Tours System
-"""
-
-        success = send_email_sync(test_email, subject, body)
-
-        if success:
-            return jsonify({'message': 'Test email sent successfully!'}), 200
-        else:
-            return jsonify({'error': 'Failed to send test email. Check email configuration.'}), 500
-
+        return jsonify({'message': f'Template {name} updated successfully'}), 200
     except Exception as e:
-        print(f"Error sending test email: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/email-templates', methods=['POST'])
+@token_required
+def create_email_template(current_user):
+    if current_user['role'] != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.get_json()
+        name = data.get("name")
+        subject = data.get("subject")
+        body = data.get("body")
+
+        if not name or not subject or not body:
+            return jsonify({'error': 'Name, subject, and body are required'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO email_templates (name, subject, body)
+            VALUES (?, ?, ?)
+        """, (name, subject, body))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'message': f'Template {name} created successfully'}), 201
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

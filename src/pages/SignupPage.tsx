@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, ChevronDown} from 'lucide-react';
+import { CheckCircle, ChevronDown } from 'lucide-react';
 import axios from 'axios';
 
 interface FormData {
@@ -103,7 +103,47 @@ const SignupPage: React.FC = () => {
     // General
     submit?: string;
   }
-  
+  // --- Add extra states at the top ---
+  const [otp, setOtp] = useState<string>('');
+  const [otpSent, setOtpSent] = useState<boolean>(false);
+  const [otpVerified, setOtpVerified] = useState<boolean>(false);
+  const [otpError, setOtpError] = useState<string>('');
+
+  // --- Send OTP ---
+  const handleSendOtp = async () => {
+    try {
+      setOtpError('');
+      await axios.post('http://localhost:5000/api/auth/request-otp', {
+        email: formData.email,
+        user_type: 'client',
+        user_data: formData
+      });
+      setOtpSent(true);
+      alert('OTP sent to your email. Please check your inbox.');
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'Failed to send OTP. Try again.');
+    }
+  };
+
+  // --- Verify OTP ---
+  const handleVerifyOtp = async () => {
+    try {
+      setOtpError('');
+      const res = await axios.post('http://localhost:5000/api/auth/verify-otp', {
+        email: formData.email,
+        otp: String(otp)
+      });
+      if (res.data.success) {
+        setOtpVerified(true);
+        alert('OTP verified successfully!');
+      } else {
+        setOtpError(res.data.error || 'Invalid OTP');
+      }
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'OTP verification failed.');
+    }
+  };
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [step, setStep] = useState<number>(1);
   const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
@@ -124,11 +164,11 @@ const SignupPage: React.FC = () => {
     'Society',
     'Other'
   ];
-  
+
   useEffect(() => {
     // Scroll to top on page load
     window.scrollTo(0, 0);
-    
+
     // Update page title
     document.title = 'Sign Up - HMX FPV Tours';
   }, []);
@@ -237,12 +277,12 @@ const SignupPage: React.FC = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const checked = type === 'checkbox' ? (e.target as HTMLInputElement).checked : undefined;
-    
+
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? checked : value
     });
-    
+
     // Clear error when user starts typing
     if (errors[name as keyof FormData]) {
       setErrors({
@@ -364,12 +404,11 @@ const SignupPage: React.FC = () => {
             <p className="text-gray-200">
               {isFormSubmitted
                 ? 'You will be redirected to your client dashboard shortly.'
-                : `Step ${step} of 4: ${
-                    step === 1 ? 'Organization Details' :
-                    step === 2 ? 'Contact Information' :
+                : `Step ${step} of 4: ${step === 1 ? 'Organization Details' :
+                  step === 2 ? 'Contact Information' :
                     step === 3 ? 'Verification Documents' :
-                    'Account Setup'
-                  }`}
+                      'Account Setup'
+                }`}
             </p>
           </div>
 
@@ -382,7 +421,7 @@ const SignupPage: React.FC = () => {
               />
             </div>
           )}
-          
+
           {/* Form Content */}
           <div className="p-8">
             {isFormSubmitted ? (
@@ -395,11 +434,11 @@ const SignupPage: React.FC = () => {
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
                   <CheckCircle size={32} className="text-green-600" />
                 </div>
-                
+
                 <h2 className="text-2xl font-heading font-semibold text-primary-900 mb-4">
                   Your Request Has Been Submitted!
                 </h2>
-                
+
                 <p className="text-gray-700 mb-6">
                   Thank you for registering your business with HMX FPV Tours. You'll be redirected to your client dashboard shortly.
                 </p>
@@ -413,9 +452,9 @@ const SignupPage: React.FC = () => {
                     <li>Schedule virtual tours for your business locations</li>
                   </ol>
                 </div>
-                
-                <Link 
-                  to="/" 
+
+                <Link
+                  to="/"
                   className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-md font-medium transition-colors inline-block"
                 >
                   Return to Home
@@ -425,31 +464,27 @@ const SignupPage: React.FC = () => {
               <>
                 {/* Progress Steps */}
                 <div className="flex items-center mb-8">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-                    step >= 1 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 1 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
                     1
                   </div>
                   <div className={`flex-1 h-1 mx-2 ${step >= 2 ? 'bg-primary-600' : 'bg-gray-200'}`}></div>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-                    step >= 2 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 2 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
                     2
                   </div>
                   <div className={`flex-1 h-1 mx-2 ${step >= 3 ? 'bg-primary-600' : 'bg-gray-200'}`}></div>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-                    step >= 3 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 3 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
                     3
                   </div>
                   <div className={`flex-1 h-1 mx-2 ${step >= 4 ? 'bg-primary-600' : 'bg-gray-200'}`}></div>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-                    step >= 4 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 4 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
                     4
                   </div>
                 </div>
-                
+
                 {/* Step 1: Organization Details */}
                 {step === 1 && (
                   <motion.div
@@ -472,9 +507,8 @@ const SignupPage: React.FC = () => {
                           name="businessName"
                           value={formData.businessName}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.businessName ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.businessName ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Your organization name"
                         />
                         {errors.businessName && (
@@ -492,9 +526,8 @@ const SignupPage: React.FC = () => {
                           name="registrationNumber"
                           value={formData.registrationNumber}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.registrationNumber ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.registrationNumber ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Registration or incorporation number"
                         />
                         {errors.registrationNumber && (
@@ -510,9 +543,8 @@ const SignupPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setIsOrgTypeDropdownOpen(!isOrgTypeDropdownOpen)}
-                            className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 text-left flex items-center justify-between ${
-                              errors.organizationType ? 'border-red-500' : 'border-gray-300'
-                            }`}
+                            className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 text-left flex items-center justify-between ${errors.organizationType ? 'border-red-500' : 'border-gray-300'
+                              }`}
                           >
                             <span className={formData.organizationType ? 'text-gray-900' : 'text-gray-500'}>
                               {formData.organizationType || 'Select organization type'}
@@ -550,9 +582,8 @@ const SignupPage: React.FC = () => {
                           name="incorporationDate"
                           value={formData.incorporationDate}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.incorporationDate ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.incorporationDate ? 'border-red-500' : 'border-gray-300'
+                            }`}
                         />
                         {errors.incorporationDate && (
                           <p className="mt-1 text-sm text-red-600">{errors.incorporationDate}</p>
@@ -569,9 +600,8 @@ const SignupPage: React.FC = () => {
                           value={formData.officialAddress}
                           onChange={handleChange}
                           rows={3}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.officialAddress ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.officialAddress ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Complete official address of your organization"
                         />
                         {errors.officialAddress && (
@@ -581,7 +611,7 @@ const SignupPage: React.FC = () => {
                     </div>
                   </motion.div>
                 )}
-                
+
                 {/* Step 2: Contact Details */}
                 {step === 2 && (
                   <motion.div
@@ -592,7 +622,7 @@ const SignupPage: React.FC = () => {
                     <h2 className="text-2xl font-heading font-semibold text-primary-900 mb-6">
                       Contact Details
                     </h2>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="officialEmail" className="block text-sm font-medium text-gray-700 mb-1">
@@ -604,9 +634,8 @@ const SignupPage: React.FC = () => {
                           name="officialEmail"
                           value={formData.officialEmail}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.officialEmail ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.officialEmail ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="hr@company.com (domain-based preferred)"
                         />
                         {errors.officialEmail && (
@@ -624,9 +653,8 @@ const SignupPage: React.FC = () => {
                           name="phone"
                           value={formData.phone}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.phone ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.phone ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Official contact number"
                         />
                         {errors.phone && (
@@ -644,9 +672,8 @@ const SignupPage: React.FC = () => {
                           name="contactName"
                           value={formData.contactName}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.contactName ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.contactName ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Full name of contact person"
                         />
                         {errors.contactName && (
@@ -664,9 +691,8 @@ const SignupPage: React.FC = () => {
                           name="contactDesignation"
                           value={formData.contactDesignation}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.contactDesignation ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.contactDesignation ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="e.g., HR Manager, CEO, Marketing Head"
                         />
                         {errors.contactDesignation && (
@@ -705,9 +731,8 @@ const SignupPage: React.FC = () => {
                           name="registrationCertificateUrl"
                           value={formData.registrationCertificateUrl}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.registrationCertificateUrl ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.registrationCertificateUrl ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="https://drive.google.com/file/d/..."
                         />
                         {errors.registrationCertificateUrl && (
@@ -725,9 +750,8 @@ const SignupPage: React.FC = () => {
                           name="taxIdentificationUrl"
                           value={formData.taxIdentificationUrl}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.taxIdentificationUrl ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.taxIdentificationUrl ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="https://drive.google.com/file/d/..."
                         />
                         {errors.taxIdentificationUrl && (
@@ -745,9 +769,8 @@ const SignupPage: React.FC = () => {
                           name="businessLicenseUrl"
                           value={formData.businessLicenseUrl}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.businessLicenseUrl ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.businessLicenseUrl ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="https://drive.google.com/file/d/..."
                         />
                         {errors.businessLicenseUrl && (
@@ -765,9 +788,8 @@ const SignupPage: React.FC = () => {
                           name="addressProofUrl"
                           value={formData.addressProofUrl}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.addressProofUrl ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.addressProofUrl ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="https://drive.google.com/file/d/..."
                         />
                         {errors.addressProofUrl && (
@@ -790,6 +812,7 @@ const SignupPage: React.FC = () => {
                     </h2>
 
                     <div className="space-y-4">
+                      {/* Email */}
                       <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                           Personal Email for Login*
@@ -800,9 +823,8 @@ const SignupPage: React.FC = () => {
                           name="email"
                           value={formData.email}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.email ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.email ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Your personal email for account access"
                         />
                         {errors.email && (
@@ -810,6 +832,7 @@ const SignupPage: React.FC = () => {
                         )}
                       </div>
 
+                      {/* Password */}
                       <div>
                         <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                           Password*
@@ -820,9 +843,8 @@ const SignupPage: React.FC = () => {
                           name="password"
                           value={formData.password}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.password ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.password ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Create a strong password"
                         />
                         {errors.password && (
@@ -830,6 +852,7 @@ const SignupPage: React.FC = () => {
                         )}
                       </div>
 
+                      {/* Confirm Password */}
                       <div>
                         <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
                           Confirm Password*
@@ -840,9 +863,8 @@ const SignupPage: React.FC = () => {
                           name="confirmPassword"
                           value={formData.confirmPassword}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Confirm your password"
                         />
                         {errors.confirmPassword && (
@@ -850,35 +872,60 @@ const SignupPage: React.FC = () => {
                         )}
                       </div>
 
+                      {/* OTP Section */}
+                      <div className="space-y-2">
+                        {!otpSent ? (
+                          <button
+                            type="button"
+                            onClick={handleSendOtp}
+                            className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md"
+                          >
+                            Send OTP
+                          </button>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              value={otp}
+                              onChange={(e) => setOtp(e.target.value)}
+                              placeholder="Enter OTP"
+                              className="w-full px-4 py-2 border rounded-md border-gray-300 focus:ring-primary-500 focus:border-primary-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleVerifyOtp}
+                              className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md"
+                            >
+                              Verify OTP
+                            </button>
+                            {otpVerified && (
+                              <p className="text-green-600 text-sm mt-1">✅ OTP Verified</p>
+                            )}
+                            {otpError && (
+                              <p className="text-red-600 text-sm mt-1">{otpError}</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Terms */}
                       <div className="flex items-start mt-6">
-                        <div className="flex items-center h-5">
-                          <input
-                            id="agreeTerms"
-                            name="agreeTerms"
-                            type="checkbox"
-                            checked={formData.agreeTerms}
-                            onChange={handleChange}
-                            className="w-4 h-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                        </div>
-                        <div className="ml-3 text-sm">
-                          <label htmlFor="agreeTerms" className={`font-medium ${errors.agreeTerms ? 'text-red-600' : 'text-gray-700'}`}>
-                            I agree to the <a href="#" className="text-primary-600 hover:text-primary-700">Terms of Service</a> and <a href="#" className="text-primary-600 hover:text-primary-700">Privacy Policy</a>
-                          </label>
-                          {errors.agreeTerms && (
-                            <p className="mt-1 text-sm text-red-600">{errors.agreeTerms}</p>
-                          )}
-                        </div>
+                        <input
+                          id="agreeTerms"
+                          name="agreeTerms"
+                          type="checkbox"
+                          checked={formData.agreeTerms}
+                          onChange={handleChange}
+                          className="w-4 h-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor="agreeTerms" className="ml-3 text-sm text-gray-700">
+                          I agree to the <a href="#" className="text-primary-600">Terms</a> & <a href="#" className="text-primary-600">Privacy Policy</a>
+                        </label>
                       </div>
                     </div>
-
-                    {submitError && (
-                      <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
-                        {submitError}
-                      </div>
-                    )}
                   </motion.div>
                 )}
+
 
                 {/* Navigation Buttons */}
                 <div className="mt-8 flex justify-between">
@@ -891,21 +938,21 @@ const SignupPage: React.FC = () => {
                       Back
                     </button>
                   )}
-                  
+
                   <button
                     type="button"
                     onClick={handleNextStep}
-                    disabled={isSubmitting}
-                    className={`ml-auto bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md transition-colors ${
-                      step === 4 ? 'w-full' : ''
-                    } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isSubmitting || (step === 4 && !otpVerified)} // disable if OTP not verified
+                    className={`ml-auto bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md transition-colors ${step === 4 ? 'w-full' : ''
+                      } ${isSubmitting || (step === 4 && !otpVerified) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {isSubmitting ? 'Submitting...' : (step < 4 ? 'Next' : 'Submit Registration')}
                   </button>
+
                 </div>
               </>
             )}
-            
+
             {/* Sign in link */}
             {!isFormSubmitted && (
               <div className="mt-6 text-center text-gray-600">

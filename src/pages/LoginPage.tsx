@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext'; // context
 
 interface FormData {
   email: string;
@@ -10,118 +10,128 @@ interface FormData {
   rememberMe: boolean;
 }
 
+type Step = 'email' | 'otp' | 'reset';
+
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<FormData>({
     email: '',
     password: '',
     rememberMe: false
   });
-  
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string>('');
   const navigate = useNavigate();
-  
+
+  const { login, isAuthenticated, user } = useAuth();
+
+  // Forgot password states
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [fpStep, setFpStep] = useState<Step>('email');
+  const [fpEmail, setFpEmail] = useState('');
+  const [fpOtp, setFpOtp] = useState('');
+  const [fpNewPassword, setFpNewPassword] = useState('');
+  const [fpError, setFpError] = useState('');
+  const [fpLoading, setFpLoading] = useState(false);
+
+  // 🔑 Redirect after successful login
   useEffect(() => {
-    // Check if user is already logged in
-    const token = localStorage.getItem('token');
-    if (token) {
-      // Verify token and redirect based on role
-      verifyToken(token);
+    if (isAuthenticated && user) {
+      if (user.role === 'admin') navigate('/admin', { replace: true });
+      else if (user.role === 'pilot') navigate('/pilot', { replace: true });
+      else if (user.role === 'editor') navigate('/editor', { replace: true });
+      else if (user.role === 'referral') navigate('/referral', { replace: true });
+      else navigate('/client', { replace: true });
     }
-    
-    // Scroll to top on page load
-    window.scrollTo(0, 0);
-    
-    // Update page title
-    document.title = 'Login - SkyView FPV Tours';
-  }, []);
-
-  const verifyToken = async (token: string) => {
-    try {
-      const response = await axios.get('http://localhost:5000/api/auth/verify', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      const role = response.data?.role;
-      // route by role
-      if (role === 'pilot') return navigate('/pilot', { replace: true });
-      if (role === 'editor') return navigate('/editor', { replace: true });
-      if (role === 'referral') return navigate('/referral', { replace: true });
-      if (role === 'admin') return navigate('/admin', { replace: true });
-      // default to business/client dashboard
-      return navigate('/client', { replace: true });
-    } catch (err) {
-      // Token is invalid, clear it
-      localStorage.removeItem('token');
-      navigate('/login');
-    }
-  };
+  }, [isAuthenticated, user, navigate]);
 
   const validate = (): boolean => {
     const newErrors: Partial<FormData> = {};
-    
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
-    }
-    
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    }
-    
+    if (!formData.email.trim()) newErrors.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
+    if (!formData.password) newErrors.password = 'Password is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    
-    setFormData({
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value
-    });
-    
-    // Clear error when user starts typing
-    if (errors[name as keyof FormData]) {
-      setErrors({
-        ...errors,
-        [name]: undefined
-      });
-    }
-    setLoginError(''); // Clear any previous login errors
+    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+    if (errors[name as keyof FormData]) setErrors({ ...errors, [name]: undefined });
+    setLoginError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (validate()) {
-      setIsLoading(true);
-      setLoginError('');
-      
-      try {
-        const response = await axios.post('http://localhost:5000/api/auth/login', {
-          email: formData.email,
-          password: formData.password
-        });
-        
-        const { token } = response.data;
-        
-        // Store token
-        localStorage.setItem('token', token);
-        
-        // Verify token then route to correct dashboard
-        await verifyToken(token);
-      } catch (err: any) {
-        if (err.response) {
-          setLoginError(err.response.data.message || 'Login failed. Please check your credentials.');
-        } else {
-          setLoginError('An error occurred. Please try again.');
-        }
-      } finally {
-        setIsLoading(false);
-      }
+    if (!validate()) return;
+
+    setIsLoading(true);
+    setLoginError('');
+    try {
+      await login(formData.email, formData.password);
+      // Navigation handled by useEffect above ✅
+    } catch (err: any) {
+      setLoginError(err.response?.data.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /** ---------------- FORGOT PASSWORD ---------------- **/
+  const sendOtp = async () => {
+    setFpError('');
+    if (!fpEmail) return setFpError('Email is required');
+    setFpLoading(true);
+    try {
+      await axios.post('http://localhost:5000/api/auth/request-otp', {
+        email: fpEmail,
+        user_type: 'user'
+      });
+      setFpStep('otp');
+    } catch (err: any) {
+      setFpError(err.response?.data.error || 'Failed to send OTP');
+    } finally {
+      setFpLoading(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    setFpError('');
+    if (!fpOtp) return setFpError('OTP is required');
+    setFpLoading(true);
+    try {
+      await axios.post('http://localhost:5000/api/auth/verify-otp', {
+        email: fpEmail,
+        otp: fpOtp
+      });
+      setFpStep('reset');
+    } catch (err: any) {
+      setFpError(err.response?.data.error || 'OTP verification failed');
+    } finally {
+      setFpLoading(false);
+    }
+  };
+
+  const resetPassword = async () => {
+    setFpError('');
+    if (!fpNewPassword) return setFpError('Password is required');
+    setFpLoading(true);
+    try {
+      await axios.post('http://localhost:5000/api/auth/reset-password', {
+        email: fpEmail,
+        new_password: fpNewPassword
+      });
+
+      setShowForgotPassword(false);
+      setFpStep('email');
+      setFpEmail('');
+      setFpOtp('');
+      setFpNewPassword('');
+      alert('Password reset successfully. You can now login.');
+    } catch (err: any) {
+      setFpError(err.response?.data.error || 'Failed to reset password');
+    } finally {
+      setFpLoading(false);
     }
   };
 
@@ -140,14 +150,10 @@ const LoginPage: React.FC = () => {
               <div className="inline-block p-3 bg-primary-800 rounded-full mb-4">
                 <span className="text-2xl font-heading font-bold text-primary-400">HMX</span>
               </div>
-              <h1 className="text-3xl font-heading font-bold mb-2">
-                Welcome Back
-              </h1>
-              <p className="text-gray-200">
-                Sign in to access your HMX account
-              </p>
+              <h1 className="text-3xl font-heading font-bold mb-2">Welcome Back</h1>
+              <p className="text-gray-200">Sign in to access your HMX account</p>
             </div>
-            
+
             {/* Form */}
             <div className="p-8">
               {loginError && (
@@ -155,7 +161,7 @@ const LoginPage: React.FC = () => {
                   {loginError}
                 </div>
               )}
-              
+
               <form onSubmit={handleSubmit}>
                 <div className="space-y-6">
                   <div>
@@ -174,19 +180,21 @@ const LoginPage: React.FC = () => {
                       placeholder="Your email"
                       disabled={isLoading}
                     />
-                    {errors.email && (
-                      <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-                    )}
+                    {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                   </div>
-                  
+
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                         Password
                       </label>
-                      <a href="#" className="text-sm text-primary-600 hover:text-primary-700">
+                      <button
+                        type="button"
+                        className="text-sm text-primary-600 hover:text-primary-700"
+                        onClick={() => setShowForgotPassword(true)}
+                      >
                         Forgot password?
-                      </a>
+                      </button>
                     </div>
                     <input
                       type="password"
@@ -200,11 +208,9 @@ const LoginPage: React.FC = () => {
                       placeholder="Your password"
                       disabled={isLoading}
                     />
-                    {errors.password && (
-                      <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-                    )}
+                    {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
                   </div>
-                  
+
                   <div className="flex items-center">
                     <input
                       id="rememberMe"
@@ -219,34 +225,104 @@ const LoginPage: React.FC = () => {
                       Remember me
                     </label>
                   </div>
-                  
+
                   <button
                     type="submit"
                     className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-4 rounded-md transition-colors flex items-center justify-center"
                     disabled={isLoading}
                   >
-                    {isLoading ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Signing in...
-                      </>
-                    ) : (
-                      'Sign In'
-                    )}
+                    {isLoading ? 'Signing in...' : 'Sign In'}
                   </button>
                 </div>
               </form>
-              
+
               <div className="mt-6 text-center text-gray-600">
-                Don't have an account? <Link to="/" className="text-primary-600 hover:text-primary-700 font-medium">Sign up</Link>
+                Don't have an account?{' '}
+                <Link to="/" className="text-primary-600 hover:text-primary-700 font-medium">
+                  Sign up
+                </Link>
               </div>
             </div>
           </motion.div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Forgot Password</h2>
+            {fpError && <p className="text-red-600 mb-2">{fpError}</p>}
+
+            {fpStep === 'email' && (
+              <>
+                <input
+                  type="email"
+                  placeholder="Your email"
+                  value={fpEmail}
+                  onChange={(e) => setFpEmail(e.target.value)}
+                  className="w-full px-4 py-3 border rounded mb-4"
+                  disabled={fpLoading}
+                />
+                <button
+                  onClick={sendOtp}
+                  className="w-full bg-primary-600 text-white py-3 rounded"
+                  disabled={fpLoading}
+                >
+                  {fpLoading ? 'Sending OTP...' : 'Send OTP'}
+                </button>
+              </>
+            )}
+
+            {fpStep === 'otp' && (
+              <>
+                <input
+                  type="text"
+                  placeholder="Enter OTP"
+                  value={fpOtp}
+                  onChange={(e) => setFpOtp(e.target.value)}
+                  className="w-full px-4 py-3 border rounded mb-4"
+                  disabled={fpLoading}
+                />
+                <button
+                  onClick={verifyOtp}
+                  className="w-full bg-primary-600 text-white py-3 rounded"
+                  disabled={fpLoading}
+                >
+                  {fpLoading ? 'Verifying OTP...' : 'Verify OTP'}
+                </button>
+              </>
+            )}
+
+            {fpStep === 'reset' && (
+              <>
+                <input
+                  type="password"
+                  placeholder="New Password"
+                  value={fpNewPassword}
+                  onChange={(e) => setFpNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 border rounded mb-4"
+                  disabled={fpLoading}
+                />
+                <button
+                  onClick={resetPassword}
+                  className="w-full bg-primary-600 text-white py-3 rounded"
+                  disabled={fpLoading}
+                >
+                  {fpLoading ? 'Resetting...' : 'Reset Password'}
+                </button>
+              </>
+            )}
+
+            <button
+              className="mt-4 text-sm text-gray-600 hover:text-gray-800"
+              onClick={() => setShowForgotPassword(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

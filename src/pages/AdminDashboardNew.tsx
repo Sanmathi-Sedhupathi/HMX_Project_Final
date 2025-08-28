@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -10,68 +10,61 @@ import {
   Video,
   DollarSign,
   Settings as SettingsIcon,
-  HelpCircle,
   Loader2,
   Database,
-  Plus
+  Mail
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import HomeContent from '../components/admin/HomeContent';
 import Orders from '../components/admin/Orders';
 import EditorManagement from '../components/admin/EditorManagement';
 import PilotManagement from '../components/admin/PilotManagement';
-import UserManagement from '../components/admin/UserManagement';
 import ClientDatabase from '../components/admin/ClientDatabase';
 import Payments from '../components/admin/Payments';
-import Cancellations from '../components/admin/Cancellations';
 import NewInquiries from '../components/admin/NewInquiries';
 import ReferralManagement from '../components/admin/ReferralManagement';
 import VideoReviews from '../components/admin/VideoReviews';
 import Settings from '../components/admin/Settings';
-import Help from '../components/admin/Help';
 import Applications from '../components/admin/Applications';
+import EmailTemplates from '../components/admin/EmailTemplates';
 
 const AdminDashboard: React.FC = () => {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      if (!isAuthenticated) {
-        console.log('Not authenticated, redirecting to login');
+    // 🚀 Don’t run any redirect logic until isLoading is false
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      console.log('Not authenticated, redirecting to login');
+      navigate('/login');
+      return;
+    }
+
+    if (!user) {
+      console.log('No user data, redirecting to login');
+      navigate('/login');
+      return;
+    }
+
+    if (user.role !== 'admin') {
+      console.log('User is not admin, redirecting to appropriate dashboard');
+      if (user.role === 'client') {
+        navigate('/client');
+      } else if (user.role === 'pilot') {
+        navigate('/pilot');
+      } else if (user.role === 'editor') {
+        navigate('/editor');
+      } else if (user.role === 'referral') {
+        navigate('/referral');
+      } else {
         navigate('/login');
-        return;
       }
+    }
+  }, [isAuthenticated, user, isLoading, navigate]);
 
-      if (!user) {
-        console.log('No user data, redirecting to login');
-        navigate('/login');
-        return;
-      }
-
-      if (user.role !== 'admin') {
-        console.log('User is not admin, redirecting to appropriate dashboard');
-        if (user.role === 'client') {
-          navigate('/client');
-        } else if (user.role === 'pilot') {
-          navigate('/pilot');
-        } else if (user.role === 'editor') {
-          navigate('/editor');
-        } else if (user.role === 'referral') {
-          navigate('/referral');
-        } else {
-          navigate('/login');
-        }
-        return;
-      }
-
-      setIsLoading(false);
-    };
-
-    checkAuth();
-  }, [isAuthenticated, user, navigate]);
 
   const handleLogout = () => {
     logout();
@@ -84,13 +77,13 @@ const AdminDashboard: React.FC = () => {
     { path: '/admin/editors', icon: <Users size={20} />, label: 'Editors' },
     { path: '/admin/pilots', icon: <UserPlus size={20} />, label: 'Pilots' },
     { path: '/admin/payments', icon: <DollarSign size={20} />, label: 'Payments' },
-    { path: '/admin/cancellations', icon: <FileText size={20} />, label: 'Cancellations' },
     { path: '/admin/inquiries', icon: <MessageSquare size={20} />, label: 'Inquiries' },
     { path: '/admin/referrals', icon: <Users size={20} />, label: 'Referrals' },
     { path: '/admin/video-reviews', icon: <Video size={20} />, label: 'Video Reviews' },
     { path: '/admin/settings', icon: <SettingsIcon size={20} />, label: 'Settings' },
     { path: '/admin/database', icon: <Database size={20} />, label: 'Client Database' },
-    { path: '/admin/applications', icon: <FileText size={20} />, label: 'Applications' }
+    { path: '/admin/applications', icon: <FileText size={20} />, label: 'Applications' },
+    { path: '/admin/email-templates', icon: <Mail size={20} />, label: 'Email Templates' }
   ];
 
   if (isLoading) {
@@ -121,9 +114,8 @@ const AdminDashboard: React.FC = () => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100 ${
-                pathname === item.path ? 'bg-gray-100 border-r-4 border-primary-600' : ''
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-gray-700 hover:bg-gray-100 ${pathname === item.path ? 'bg-gray-100 border-r-4 border-primary-600' : ''
+                }`}
             >
               {item.icon}
               <span className="ml-3">{item.label}</span>
@@ -150,13 +142,13 @@ const AdminDashboard: React.FC = () => {
             <Route path="/editors" element={<EditorManagement />} />
             <Route path="/pilots" element={<PilotManagement />} />
             <Route path="/payments" element={<Payments />} />
-            <Route path="/cancellations" element={<Cancellations />} />
             <Route path="/inquiries" element={<NewInquiries />} />
             <Route path="/referrals" element={<ReferralManagement />} />
             <Route path="/video-reviews" element={<VideoReviews />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/database" element={<ClientDatabase />} />
             <Route path="/applications" element={<Applications />} />
+            <Route path="/email-templates" element={<EmailTemplates />} />
           </Routes>
         </div>
       </div>

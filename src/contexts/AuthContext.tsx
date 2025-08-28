@@ -8,6 +8,7 @@ interface AuthContextType {
   register: (data: any) => Promise<void>;
   logout: () => void;
   verifyToken: () => Promise<boolean>;
+  isLoading: boolean; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -59,31 +60,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     verifyToken();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    try {
-      const response = await authService.login({ email, password });
-      setIsAuthenticated(true);
-      
-      // Verify token and get user data
-      await verifyToken();
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
+const login = async (email: string, password: string) => {
+  setIsLoading(true); // Start loading
+  try {
+    const response = await authService.login({ email, password });
+    if (response.token) {
+      localStorage.setItem('token', response.token);
     }
-  };
+    // Only set isAuthenticated after verifyToken
+    const verified = await verifyToken();
+    setIsAuthenticated(verified);
+  } catch (error) {
+    setIsAuthenticated(false);
+    setUser(null);
+    throw error;
+  } finally {
+    setIsLoading(false); // Done loading
+  }
+};
 
-  const register = async (data: any) => {
-    try {
-      const response = await authService.register(data);
-      setIsAuthenticated(true);
-      
-      // Verify token and get user data
-      await verifyToken();
-    } catch (error) {
-      console.error('Registration failed:', error);
-      throw error;
-    }
-  };
+const register = async (data: any) => {
+  try {
+    const response = await authService.register(data);
+    // Verify token and get user data
+    const verified = await verifyToken();
+    setIsAuthenticated(verified); // Only set true if verified
+  } catch (error) {
+    console.error('Registration failed:', error);
+    throw error;
+  }
+};
 
   const logout = () => {
     authService.logout();
@@ -91,12 +97,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, register, logout, verifyToken }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, register, logout, verifyToken,isLoading }}>
       {children}
     </AuthContext.Provider>
   );

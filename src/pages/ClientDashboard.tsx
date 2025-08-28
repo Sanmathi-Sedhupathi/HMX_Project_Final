@@ -250,7 +250,7 @@ const ProjectsContent: React.FC = () => {
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
-  const [totalSteps] = useState(3); // now only 3 steps
+  const [totalSteps] = useState(2); // now only 3 steps
   const [newBooking, setNewBooking] = useState<any>({
     location_address: '',
     gps_link: '',
@@ -263,13 +263,6 @@ const ProjectsContent: React.FC = () => {
     preferred_date: '',
     preferred_time: '',
     special_requirements: '',
-
-    // Video Specifications
-    fpv_tour_type: '',
-    video_length: '',
-    resolution: '',
-    editing_style: '',
-    background_music_voiceover: false,
 
     // Cost fields
     base_package_cost: 0,
@@ -335,12 +328,7 @@ const ProjectsContent: React.FC = () => {
         preferred_time: newBooking.preferred_time,
         special_requirements: newBooking.special_requirements,
 
-        // Video Specifications
-        fpv_tour_type: newBooking.fpv_tour_type,
-        video_length: parseInt(newBooking.video_length) || 0,
-        resolution: newBooking.resolution,
-        background_music_voiceover: newBooking.background_music_voiceover,
-        editing_style: newBooking.editing_style,
+
 
         // Cost Calculation (auto only)
         base_package_cost: newBooking.base_package_cost,
@@ -364,7 +352,7 @@ const ProjectsContent: React.FC = () => {
   };
 
 
-  // Step validation
+  // Validation
   const validateStep1 = () => (
     newBooking.location_address &&
     newBooking.property_type &&
@@ -375,19 +363,12 @@ const ProjectsContent: React.FC = () => {
     newBooking.preferred_date &&
     newBooking.preferred_time
   );
-  const validateStep2 = () => (
-    newBooking.fpv_tour_type &&
-    newBooking.video_length &&
-    newBooking.resolution &&
-    newBooking.editing_style
-  );
-  const validateStep3 = () => true;
+  const validateStep2 = () => true;
 
   const validateCurrentStep = () => {
     switch (currentStep) {
       case 1: return validateStep1();
       case 2: return validateStep2();
-      case 3: return validateStep3();
       default: return false;
     }
   };
@@ -578,29 +559,34 @@ const ProjectsContent: React.FC = () => {
               {/* Step Progress Indicator */}
               <div className="mb-8">
                 <div className="flex items-center justify-between">
-                  {[1, 2, 3].map((step) => (
+                  {[1, 2].map((step) => (
                     <div key={step} className="flex items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step <= currentStep
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-gray-200 text-gray-500'
-                        }`}>
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step <= currentStep
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-gray-200 text-gray-500'
+                          }`}
+                      >
                         {step}
                       </div>
-                      <div className={`ml-2 text-sm font-medium ${step <= currentStep ? 'text-primary-600' : 'text-gray-500'
-                        }`}>
+                      <div
+                        className={`ml-2 text-sm font-medium ${step <= currentStep ? 'text-primary-600' : 'text-gray-500'
+                          }`}
+                      >
                         {step === 1 && 'Project Details'}
-                        {step === 2 && 'Video Specs'}
-
-                        {step === 3 && 'Review & Submit'}
+                        {step === 2 && 'Review & Submit'}
                       </div>
-                      {step < 3 && (
-                        <div className={`ml-4 w-16 h-0.5 ${step < currentStep ? 'bg-primary-600' : 'bg-gray-200'
-                          }`} />
+                      {step < 2 && (
+                        <div
+                          className={`ml-4 w-16 h-0.5 ${step < currentStep ? 'bg-primary-600' : 'bg-gray-200'
+                            }`}
+                        />
                       )}
                     </div>
                   ))}
                 </div>
               </div>
+
 
               {/* Step Content */}
               <div className="min-h-[400px]">
@@ -809,91 +795,7 @@ const ProjectsContent: React.FC = () => {
                   </div>
                 )}
 
-                {/* Step 2: Video Specifications */}
                 {currentStep === 2 && (
-                  <div className="space-y-6">
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                        🎥 Step 2: Video Specifications
-                      </h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Type of FPV Tour</label>
-                          <select
-                            value={newBooking.fpv_tour_type}
-                            onChange={e => setNewBooking({ ...newBooking, fpv_tour_type: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            required
-                          >
-                            <option value="">Select Tour Type</option>
-                            <option value="Walkthrough Tour">Walkthrough Tour</option>
-                            <option value="Fly-through Tour">Fly-through Tour</option>
-                            <option value="Hybrid (Indoor + Outdoor)">Hybrid (Indoor + Outdoor)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Video Length Required (minutes)</label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="30"
-                            value={newBooking.video_length}
-                            onChange={e => setNewBooking({ ...newBooking, video_length: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            placeholder="e.g. 3"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Resolution</label>
-                          <select
-                            value={newBooking.resolution}
-                            onChange={e => setNewBooking({ ...newBooking, resolution: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            required
-                          >
-                            <option value="">Select Resolution</option>
-                            <option value="Full HD (1080p)">Full HD (1080p)</option>
-                            <option value="4K">4K</option>
-                            <option value="6K">6K</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Editing Style</label>
-                          <select
-                            value={newBooking.editing_style}
-                            onChange={e => setNewBooking({ ...newBooking, editing_style: e.target.value })}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 bg-white"
-                            required
-                          >
-                            <option value="">Select Style</option>
-                            <option value="Cinematic">Cinematic</option>
-                            <option value="Informative">Informative</option>
-                            <option value="Fast-paced">Fast-paced</option>
-                            <option value="Luxury/Premium">Luxury/Premium</option>
-                            <option value="Corporate">Corporate</option>
-                          </select>
-                        </div>
-                        <div className="col-span-2">
-                          <label className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={newBooking.background_music_voiceover}
-                              onChange={e => setNewBooking({ ...newBooking, background_music_voiceover: e.target.checked })}
-                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                            />
-                            <span className="text-sm font-medium text-gray-700">Background Music / Voiceover Needed</span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-
-
-                {/* Step 4: Review & Submit */}
-                {currentStep === 3 && (
                   <div className="space-y-6">
                     <div className="bg-purple-50 p-4 rounded-lg">
                       <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -908,13 +810,7 @@ const ProjectsContent: React.FC = () => {
                             <p className="text-sm text-gray-600">📐 {newBooking.area_size} {newBooking.area_unit}</p>
                             <p className="text-sm text-gray-600">📅 {newBooking.preferred_date} - {newBooking.preferred_time}</p>
                           </div>
-                          <div>
-                            <h5 className="font-medium text-gray-900">Video Specifications</h5>
-                            <p className="text-sm text-gray-600">🎥 {newBooking.fpv_tour_type}</p>
-                            <p className="text-sm text-gray-600">⏱️ {newBooking.video_length} minutes</p>
-                            <p className="text-sm text-gray-600">📺 {newBooking.resolution}</p>
-                            <p className="text-sm text-gray-600">🎨 {newBooking.editing_style}</p>
-                          </div>
+            
                         </div>
                         <div className="border-t pt-4">
                           <h5 className="font-medium text-gray-900">Total Cost</h5>

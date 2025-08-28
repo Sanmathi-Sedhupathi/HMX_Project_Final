@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle } from 'lucide-react';
 import { referralService } from '../services/api';
+import axios from 'axios';
 
 interface FormData {
   name: string;
@@ -27,63 +28,68 @@ const ReferralSignupPage: React.FC = () => {
     message: '',
     agreeTerms: false,
   });
-  
+
   interface Errors extends Partial<FormData> {
     submit?: string;
   }
-  
+
   const [errors, setErrors] = useState<Errors>({});
   const [step, setStep] = useState<number>(1);
   const [isFormSubmitted, setIsFormSubmitted] = useState<boolean>(false);
-  
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpError, setOtpError] = useState('');
+
+
   useEffect(() => {
     // Scroll to top on page load
     window.scrollTo(0, 0);
-    
+
     // Update page title
     document.title = 'Referral Partner Sign Up - HMX FPV Tours';
   }, []);
 
   const validateStep1 = (): boolean => {
     const newErrors: Partial<FormData> = {};
-    
+
     if (!formData.name.trim()) {
       newErrors.name = 'Name is required';
     }
-    
+
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
+
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
     }
-    
+
     if (!formData.city.trim()) {
       newErrors.city = 'City is required';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const validateStep2 = (): boolean => {
     const newErrors: Partial<FormData> = {};
-    
+
     if (!formData.referralSource.trim()) {
       newErrors.referralSource = 'Please tell us how you heard about us';
     }
-    
+
     if (!formData.businessTypes.trim()) {
       newErrors.businessTypes = 'Please specify business types you can refer';
     }
-    
+
     if (!formData.agreeTerms) {
       newErrors.agreeTerms = 'You must confirm understanding of referral responsibilities';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -91,12 +97,12 @@ const ReferralSignupPage: React.FC = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const checked = type === 'checkbox' ? (e.target as HTMLInputElement).checked : undefined;
-    
+
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? checked : value
     });
-    
+
     // Clear error when user starts typing
     if (errors[name as keyof FormData]) {
       setErrors({
@@ -154,7 +160,38 @@ const ReferralSignupPage: React.FC = () => {
     'Blog or Article',
     'Other'
   ];
+  const requestOtp = async () => {
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/request-otp', {
+        email: formData.email,
+        user_type: 'editor',
+        user_data: formData
+      });
+      if (res.data.success) {
+        setOtpSent(true);
+        setOtpError('');
+        alert('OTP sent to your email!');
+      }
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'Failed to send OTP');
+    }
+  };
 
+  const verifyOtp = async () => {
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/verify-otp', {
+        email: formData.email,
+        otp: otp
+      });
+      if (res.data.success) {
+        setOtpVerified(true);
+        setOtpError('');
+        alert('OTP Verified! You can continue.');
+      }
+    } catch (err: any) {
+      setOtpError(err.response?.data?.error || 'Invalid OTP');
+    }
+  };
   return (
     <div className="min-h-screen pt-20 pb-16 bg-gray-50">
       <div className="container mx-auto px-4">
@@ -162,8 +199,8 @@ const ReferralSignupPage: React.FC = () => {
           {/* Header */}
           <div className="bg-primary-900 text-white p-8">
             <h1 className="text-3xl font-heading font-bold mb-2">
-              {isFormSubmitted 
-                ? 'Referral Partner Application Submitted!' 
+              {isFormSubmitted
+                ? 'Referral Partner Application Submitted!'
                 : 'Become a HMX Referral Partner'}
             </h1>
             <p className="text-gray-200">
@@ -172,7 +209,7 @@ const ReferralSignupPage: React.FC = () => {
                 : 'Join our referral program and earn generous commissions by connecting businesses with our FPV virtual tour services.'}
             </p>
           </div>
-          
+
           {/* Form Content */}
           <div className="p-8">
             {isFormSubmitted ? (
@@ -185,15 +222,15 @@ const ReferralSignupPage: React.FC = () => {
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
                   <CheckCircle size={32} className="text-green-600" />
                 </div>
-                
+
                 <h2 className="text-2xl font-heading font-semibold text-primary-900 mb-4">
                   Your Application Has Been Received!
                 </h2>
-                
+
                 <p className="text-gray-700 mb-6">
                   Thanks for your interest in becoming a HMX referral partner. You'll be redirected to your dashboard shortly.
                 </p>
-                
+
                 <div className="bg-primary-50 rounded-lg p-6 text-left mb-8">
                   <h3 className="text-lg font-medium text-primary-900 mb-3">What happens next?</h3>
                   <ol className="list-decimal pl-5 space-y-2 text-gray-700">
@@ -203,9 +240,9 @@ const ReferralSignupPage: React.FC = () => {
                     <li>Start referring businesses and earning commissions</li>
                   </ol>
                 </div>
-                
-                <Link 
-                  to="/" 
+
+                <Link
+                  to="/"
                   className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3 rounded-md font-medium transition-colors inline-block"
                 >
                   Return to Home
@@ -215,19 +252,17 @@ const ReferralSignupPage: React.FC = () => {
               <>
                 {/* Progress Steps */}
                 <div className="flex items-center mb-8">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-                    step >= 1 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 1 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
                     1
                   </div>
                   <div className={`flex-1 h-1 mx-2 ${step >= 2 ? 'bg-primary-600' : 'bg-gray-200'}`}></div>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${
-                    step >= 2 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium ${step >= 2 ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
                     2
                   </div>
                 </div>
-                
+
                 {/* Step 1: Personal Information */}
                 {step === 1 && (
                   <motion.div
@@ -238,7 +273,7 @@ const ReferralSignupPage: React.FC = () => {
                     <h2 className="text-2xl font-heading font-semibold text-primary-900 mb-6">
                       Contact Information
                     </h2>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
@@ -250,16 +285,15 @@ const ReferralSignupPage: React.FC = () => {
                           name="name"
                           value={formData.name}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.name ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.name ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Your full name"
                         />
                         {errors.name && (
                           <p className="mt-1 text-sm text-red-600">{errors.name}</p>
                         )}
                       </div>
-                      
+
                       <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                           Email Address*
@@ -270,16 +304,15 @@ const ReferralSignupPage: React.FC = () => {
                           name="email"
                           value={formData.email}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.email ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.email ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Your email"
                         />
                         {errors.email && (
                           <p className="mt-1 text-sm text-red-600">{errors.email}</p>
                         )}
                       </div>
-                      
+
                       <div>
                         <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                           Phone Number*
@@ -290,16 +323,15 @@ const ReferralSignupPage: React.FC = () => {
                           name="phone"
                           value={formData.phone}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.phone ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.phone ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Your phone number"
                         />
                         {errors.phone && (
                           <p className="mt-1 text-sm text-red-600">{errors.phone}</p>
                         )}
                       </div>
-                      
+
                       <div>
                         <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
                           City*
@@ -310,19 +342,54 @@ const ReferralSignupPage: React.FC = () => {
                           name="city"
                           value={formData.city}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.city ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.city ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="Your city of residence"
                         />
                         {errors.city && (
                           <p className="mt-1 text-sm text-red-600">{errors.city}</p>
                         )}
                       </div>
+                      {/* OTP Section */}
+                      <div>
+                        {!otpSent ? (
+                          <button
+                            type="button"
+                            onClick={requestOtp}
+                            disabled={!formData.email}
+                            className="mt-2 bg-primary-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                          >
+                            Send OTP
+                          </button>
+                        ) : !otpVerified && (
+                          <div>
+                            <label className="block font-semibold mb-1">Enter OTP*</label>
+                            <input
+                              type="text"
+                              value={otp}
+                              onChange={(e) => setOtp(e.target.value)}
+                              placeholder="Enter the 6-digit OTP"
+                              className="w-full border rounded-lg px-4 py-2"
+                            />
+                            <button
+                              type="button"
+                              onClick={verifyOtp}
+                              className="mt-2 bg-primary-600 text-white px-4 py-2 rounded"
+                            >
+                              Verify OTP
+                            </button>
+                            {otpError && <div className="text-red-500 text-sm mt-1">{otpError}</div>}
+                          </div>
+                        )}
+                        {otpVerified && (
+                          <div className="text-green-600 font-semibold"> OTP Verified</div>
+                        )}
+                      </div>
+
                     </div>
                   </motion.div>
                 )}
-                
+
                 {/* Step 2: Referral Details */}
                 {step === 2 && (
                   <motion.div
@@ -333,7 +400,7 @@ const ReferralSignupPage: React.FC = () => {
                     <h2 className="text-2xl font-heading font-semibold text-primary-900 mb-6">
                       Referral Information
                     </h2>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="referralSource" className="block text-sm font-medium text-gray-700 mb-1">
@@ -344,9 +411,8 @@ const ReferralSignupPage: React.FC = () => {
                           name="referralSource"
                           value={formData.referralSource}
                           onChange={handleChange}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.referralSource ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.referralSource ? 'border-red-500' : 'border-gray-300'
+                            }`}
                         >
                           <option value="">Select an option</option>
                           {referralSources.map((source, index) => (
@@ -357,7 +423,7 @@ const ReferralSignupPage: React.FC = () => {
                           <p className="mt-1 text-sm text-red-600">{errors.referralSource}</p>
                         )}
                       </div>
-                      
+
                       <div>
                         <label htmlFor="businessTypes" className="block text-sm font-medium text-gray-700 mb-1">
                           Types of businesses you can refer*
@@ -368,16 +434,15 @@ const ReferralSignupPage: React.FC = () => {
                           value={formData.businessTypes}
                           onChange={handleChange}
                           rows={3}
-                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${
-                            errors.businessTypes ? 'border-red-500' : 'border-gray-300'
-                          }`}
+                          className={`w-full px-4 py-2 border rounded-md focus:ring-primary-500 focus:border-primary-500 ${errors.businessTypes ? 'border-red-500' : 'border-gray-300'
+                            }`}
                           placeholder="E.g., Retail stores, restaurants, real estate agencies, etc."
                         ></textarea>
                         {errors.businessTypes && (
                           <p className="mt-1 text-sm text-red-600">{errors.businessTypes}</p>
                         )}
                       </div>
-                      
+
                       <div>
                         <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
                           Additional Information (Optional)
@@ -392,7 +457,7 @@ const ReferralSignupPage: React.FC = () => {
                           placeholder="Tell us about your network or any other information you'd like to share"
                         ></textarea>
                       </div>
-                      
+
                       <div className="mt-6 bg-primary-50 p-4 rounded-lg">
                         <h3 className="text-lg font-medium text-primary-900 mb-3">
                           Referral Program Benefits
@@ -415,7 +480,7 @@ const ReferralSignupPage: React.FC = () => {
                             <span className="text-gray-700">Transparent tracking dashboard for all your referrals</span>
                           </li>
                         </ul>
-                        
+
                         <div className="flex items-start">
                           <div className="flex items-center h-5">
                             <input
@@ -440,7 +505,7 @@ const ReferralSignupPage: React.FC = () => {
                     </div>
                   </motion.div>
                 )}
-                
+
                 {/* Navigation Buttons */}
                 <div className="mt-8 flex justify-between">
                   {step > 1 && (
@@ -452,18 +517,17 @@ const ReferralSignupPage: React.FC = () => {
                       Back
                     </button>
                   )}
-                  
+
                   <button
                     type="button"
                     onClick={handleNextStep}
-                    className={`ml-auto bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md transition-colors ${
-                      step === 2 ? 'w-full' : ''
-                    }`}
+                    className={`ml-auto bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md transition-colors ${step === 2 ? 'w-full' : ''
+                      }`}
                   >
                     {step === 1 ? 'Next' : 'Submit Application'}
                   </button>
                 </div>
-                
+
                 {errors.submit && (
                   <p className="mt-4 text-sm text-red-600 text-center">{errors.submit}</p>
                 )}

@@ -44,11 +44,6 @@ interface Order {
   drive_link: string;
   delivery_video_link: string;
   drone_permissions_required: boolean;
-  fpv_tour_type: string;
-  video_length: number;
-  resolution: string;
-  background_music_voiceover: boolean;
-  editing_style: string;
   base_package_cost: number;
   area_covered: number;
   shooting_hours: number;
@@ -161,7 +156,7 @@ const Orders: React.FC = () => {
 
   const handleUpdateOrder = async (id: number, updates: any) => {
     try {
-      const response = await fetch(`/api/admin/orders/${id}`, {
+      const response = await fetch(`http://localhost:5000/api/admin/orders/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -202,7 +197,7 @@ const Orders: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this order?')) return;
 
     try {
-      const response = await fetch(`/api/admin/orders/${id}`, {
+      const response = await fetch(`http://localhost:5000/api/admin/orders/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -385,7 +380,7 @@ const Orders: React.FC = () => {
                           <span className="text-gray-500">No Client</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap">{order.property_type || order.industry || 'Not specified'}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">{order.property_type }</td>
                       <td className="px-4 py-4">
                         <div className="text-sm text-gray-900 max-w-24 truncate">
                           {(order.location_address || order.location || 'Not specified').length > 20
@@ -915,61 +910,6 @@ const Orders: React.FC = () => {
                     <div>
                       <span className="text-sm font-medium text-gray-600">Area Covered:</span>
                       <p className="text-gray-900">{selectedOrder.area_size || 'Not specified'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Video Specifications */}
-                <div className="bg-red-50 p-4 rounded-lg col-span-3">
-                  <h3 className="font-bold text-red-800 mb-3 text-lg">🎥 Video Specifications</h3>
-                  <div className="grid grid-cols-4 gap-4">
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">FPV Tour Type:</span>
-                      <p className="text-gray-900">{selectedOrder.fpv_tour_type || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Video Length:</span>
-                      <p className="text-gray-900">{selectedOrder.video_length ? `${selectedOrder.video_length} minutes` : 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Resolution:</span>
-                      <p className="text-gray-900">{selectedOrder.resolution || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Editing Style:</span>
-                      <p className="text-gray-900">{selectedOrder.editing_style || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Background Music/Voiceover:</span>
-                      <p className="text-gray-900">{selectedOrder.background_music_voiceover ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Editing & Color Grading:</span>
-                      <p className="text-gray-900">{selectedOrder.editing_color_grading ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Voiceover Script:</span>
-                      <p className="text-gray-900">{selectedOrder.voiceover_script ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Licensed Background Music:</span>
-                      <p className="text-gray-900">{selectedOrder.background_music_licensed ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Branding Overlay:</span>
-                      <p className="text-gray-900">{selectedOrder.branding_overlay ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Multiple Revisions:</span>
-                      <p className="text-gray-900">{selectedOrder.multiple_revisions ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Drone Licensing Fee:</span>
-                      <p className="text-gray-900">{selectedOrder.drone_licensing_fee ? 'Yes' : 'No'}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Drone Permissions Required:</span>
-                      <p className="text-gray-900">{selectedOrder.drone_permissions_required ? 'Yes' : 'No'}</p>
                     </div>
                   </div>
                 </div>
