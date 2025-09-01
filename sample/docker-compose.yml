@@ -5,25 +5,18 @@ services:
     build: ./backend
     container_name: flask-backend
     volumes:
-      - ./backend:/app
+      - ./backend/hmx.db:/app/hmx.db
+    ports:
+      - "5000:5000"
     restart: always
 
   frontend:
     build:
-      context: .                  # React root is hmx/
-      dockerfile: ./frontend/Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: react-frontend
-    restart: always
-
-  nginx:
-    image: nginx:alpine
-    container_name: nginx-proxy
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
     ports:
       - "80:80"
-      - "443:443"
     depends_on:
       - backend
-      - frontend
     restart: always
